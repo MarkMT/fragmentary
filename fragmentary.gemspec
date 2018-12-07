@@ -9,7 +9,8 @@ Gem::Specification.new do |spec|
   spec.authors       = ["Mark Thomson"]
   spec.email         = ["mark.thomson@persuasivethinking.com"]
 
-  spec.summary       = %q{Fragment modeling and caching for Rails}
+  spec.summary       = "Fragment modeling and caching for Rails"
+  spec.description   = "Fragment caching for Rails with arbitrarily complex data dependencies"
   spec.homepage      = "https://github.com/MarkMT/fragmentary"
   spec.license       = "MIT"
 
