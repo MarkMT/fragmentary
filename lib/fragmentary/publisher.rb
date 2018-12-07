@@ -1,3 +1,5 @@
+require 'wisper/active_record'
+
 module Fragmentary
 
   module Publisher
