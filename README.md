@@ -6,7 +6,7 @@ Fragmentary augments the fragment caching capabilities of Ruby on Rails to suppo
 * post-cache insertion of user-specific content
 * automatic refreshing of cached content when application data changes, without an external client request
 
-**Note**: Fragmentary has been extracted from [Persuasive Thinking](http://persuasivethinking.com) where it is currently in active use. This current version should be considered 'pre-release' in terms of its readiness for seamless integration into other applications. See [Integration Issues](## Integration Issues) for details of issues that should be considered when using it elsewhere.
+**Note**: Fragmentary has been extracted from [Persuasive Thinking](http://persuasivethinking.com) where it is currently in active use. This current version should be considered 'pre-release' in terms of its readiness for seamless integration into other applications. See [Integration Issues](https://github.com/MarkMT/fragmentary/blob/master/README.md#integration-issues) for details of issues that should be considered when using it elsewhere.
 
 ## Background
 In simple cases, Rails' native support for fragment caching assumes that a fragment's content is a representation of a specific application data record. The content is stored in the cache with a key value derived from the `updated_at` attribute of that record. If any attributes of the record change, the cached entry automatically expires and on the next browser request for that content the fragment is re-rendered using the current data. In the view, the `cache` helper is used to specify the record used to determine the key and define the content to be rendered within the fragment, e.g.:
