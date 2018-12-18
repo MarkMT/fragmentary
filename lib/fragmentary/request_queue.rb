@@ -30,31 +30,12 @@ module Fragmentary
       @requests.size
     end
 
-    def session
-      @session ||= new_session
-    end
-
-    def new_session
-      case user_type
-      when 'signed_in'
-        UserSession.new('Bob')
-      when 'admin'
-        UserSession.new('Alice', :admin => true)
-      else
-        UserSession.new
-      end
-    end
-
     def next_request
       @requests.shift
     end
 
     def clear
       @requests = []
-    end
-
-    def clear_session
-      @session = nil
     end
 
     def remove_path(path)
@@ -88,7 +69,7 @@ module Fragmentary
 
       def send_next_request
         if queue.size > 0
-          queue.session.instance_exec(&(next_request))
+          session.instance_exec(&(next_request))
         end
       end
 
@@ -125,12 +106,31 @@ module Fragmentary
 
       def schedule_requests(delay=0.seconds)
         if queue.size > 0
-          queue.clear_session
+          clear_session
           Delayed::Job.transaction do
             self.class.jobs.destroy_all
             Delayed::Job.enqueue self, :run_at => delay.from_now
           end
         end
+      end
+
+      def session
+        @session ||= new_session
+      end
+
+      def new_session
+        case queue.user_type
+        when 'signed_in'
+          UserSession.new('Bob')
+        when 'admin'
+          UserSession.new('Alice', :admin => true)
+        else
+          UserSession.new
+        end
+      end
+
+      def clear_session
+        @session = nil
       end
 
     end
