@@ -4,7 +4,7 @@ module Fragmentary
 
     include ActionView::Helpers::JavaScriptHelper
 
-    attr_reader :template, :current_user, :widget_container
+    attr_reader :template, :widget_container
 
     def initialize(template)
       @template = template

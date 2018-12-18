@@ -41,7 +41,7 @@ module Fragmentary
 
     def initialize(template, key)
       super
-      @current_user = template.respond_to?(:current_user) ? template.current_user : nil
+      @current_user = Fragmentary::Template.new(template).current_user
     end
 
     def _content
