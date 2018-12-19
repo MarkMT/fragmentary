@@ -63,22 +63,6 @@ module Fragmentary
         @queue = queue
       end
 
-      def next_request
-        queue.next_request.to_proc
-      end
-
-      def send_next_request
-        if queue.size > 0
-          session.instance_exec(&(next_request))
-        end
-      end
-
-      def send_all_requests
-        while queue.size > 0
-          send_next_request
-        end
-      end
-
       # Send all requests, either directly or by schedule
       def start(delay: nil, between: nil)
         Rails.logger.info "\n***** Processing request queue for user_type '#{queue.user_type}'\n"
@@ -103,6 +87,22 @@ module Fragmentary
       end
 
       private
+
+      def next_request
+        queue.next_request.to_proc
+      end
+
+      def send_next_request
+        if queue.size > 0
+          session.instance_exec(&(next_request))
+        end
+      end
+
+      def send_all_requests
+        while queue.size > 0
+          send_next_request
+        end
+      end
 
       def schedule_requests(delay=0.seconds)
         if queue.size > 0
