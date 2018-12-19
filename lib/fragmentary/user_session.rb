@@ -23,13 +23,13 @@ module Fragmentary
     end
 
     def sign_out
-      post '/users/sign_out', {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}
+      post Fragmentary.config.sign_out_path, {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}
     end
 
     def sign_in
-      get "/users/sign_in"  # necessary in order to get the csrf token
+      get Fragmentary.config.get_sign_in_path  # necessary in order to get the csrf token
       # NOTE: In Rails 5, params is changed to a named argument, i.e. :params => {...}. Will need to be changed.
-      post "/users/sign_in", {:user => {:email => user.email, :password => user.try(:password)},
+      post Fragmentary.config.post_sign_in_path, {:user => {:email => user.email, :password => user.try(:password)},
                               :authenticity_token => request.session[:_csrf_token]}
       if session.redirect?
         follow_redirect!
