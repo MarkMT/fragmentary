@@ -30,6 +30,8 @@ module Fragmentary
       match ? content : nil
     end
 
+    private
+
     def content
       "Undefined Widget"
     end
@@ -47,6 +49,8 @@ module Fragmentary
     def _content
       match ? user_content : nil
     end
+
+    private
 
     def user_content
       current_user ? content : ""
