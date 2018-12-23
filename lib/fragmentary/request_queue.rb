@@ -119,14 +119,8 @@ module Fragmentary
       end
 
       def new_session
-        case queue.user_type
-        when 'signed_in'
-          UserSession.new('Bob')
-        when 'admin'
-          UserSession.new('Alice', :admin => true)
-        else
-          UserSession.new
-        end
+        session_user = Fragmentary.config.session_users[queue.user_type]
+        UserSession.new(session_user)
       end
 
       def clear_session

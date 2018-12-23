@@ -531,11 +531,11 @@ module Fragmentary
       end
 
       def user_types
-        ['admin', 'signed_in']
+        Fragmentary.config.session_users.keys
       end
 
       def user_type(user)
-        user ? (user.is_an_admin? ? "admin" : "signed_in") : "signed_out"
+        Fragmentary.config.default_user_type_mapping.call(user)
       end
     end
 
