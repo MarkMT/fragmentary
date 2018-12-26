@@ -4,10 +4,8 @@ module Fragmentary
 
   class RequestQueue
 
-    @@all = []
-
     def self.all
-      @@all
+      @@all ||= []
     end
 
     attr_reader :requests, :user_type, :sender
@@ -119,7 +117,7 @@ module Fragmentary
       end
 
       def new_session
-        session_user = Fragmentary.config.session_users[queue.user_type]
+        session_user = Fragmentary::SessionUser.fetch(queue.user_type)
         UserSession.new(session_user)
       end
 

@@ -152,8 +152,18 @@ module Fragmentary
       # signed in. When the fragment is instantiated using FragmentsHelper methods 'cache_fragment' or 'CacheBuilder.cache_child',
       # a :user option is added to the options hash automatically from the value of 'current_user'. The user_type is extracted
       # from this option in Fragment.find_or_create.
-      def needs_user_type
+      def needs_user_type(options = {})
         self.extend NeedsUserType
+        instance_eval do
+          @user_type_mapping = options[:user_type_mapping]
+          def self.user_type(user)
+            (@user_type_mapping || Fragmentary.config.default_user_type_mapping).try(:call, user)
+          end
+          @user_types = Fragmentary.parse_session_users(options[:session_users] || options[:types] || options[:user_types])
+          def self.user_types
+            @user_types || Fragmentary.config.session_users.keys
+          end
+        end
       end
 
       def needs_key(options = {})
@@ -528,14 +538,6 @@ module Fragmentary
     module NeedsUserType
       def needs_user_type?
         true
-      end
-
-      def user_types
-        Fragmentary.config.session_users.keys
-      end
-
-      def user_type(user)
-        Fragmentary.config.default_user_type_mapping.call(user)
       end
     end
 

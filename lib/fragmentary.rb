@@ -1,4 +1,5 @@
 require 'fragmentary/version'
+require 'fragmentary/config'
 require 'fragmentary/fragments_helper'
 require 'fragmentary/subscriber'
 require 'fragmentary/request_queue'
@@ -9,7 +10,6 @@ require 'fragmentary/user_session'
 require 'fragmentary/widget_parser'
 require 'fragmentary/widget'
 require 'fragmentary/publisher'
-require 'fragmentary/config'
 
 module Fragmentary
   def self.config
