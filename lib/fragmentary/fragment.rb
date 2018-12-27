@@ -118,7 +118,7 @@ module Fragmentary
         if self == base_class
           @@request_queues
         else
-          return nil unless new.requestable?
+          return nil unless requestable?
           user_types.each_with_object({}){|user_type, queues| queues[user_type] = @@request_queues[user_type]}
         end
       end
@@ -278,7 +278,7 @@ module Fragmentary
       end
 
       def requestable?
-        respond_to? :request_path
+        respond_to?(:request_path) || new.requestable?
       end
 
       # Subclasses that define a class method self.request_path also need to override this method
