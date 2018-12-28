@@ -214,10 +214,7 @@ module Fragmentary
               set_callback :after_destroy, :after, ->{subscriber.client.remove_fragments_for_record(record.id)}
             end
           end
-
-          def record
-            record_type.constantize.find(record_id)
-          end
+          define_method(:record){record_type.constantize.find(record_id)}
         end
       end
 
