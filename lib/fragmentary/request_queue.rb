@@ -14,7 +14,7 @@ module Fragmentary
       @user_type = user_type
       @requests = []
       @sender = Sender.new(self)
-      @@all << self
+      self.class.all << self
     end
 
     def <<(request)
