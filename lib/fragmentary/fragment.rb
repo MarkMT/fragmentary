@@ -214,6 +214,18 @@ module Fragmentary
               set_callback :after_destroy, :after, ->{subscriber.client.remove_fragments_for_record(record.id)}
             end
           end
+
+          if respond_to? :request_path
+            record_class = record_type.constantize
+            instance_eval <<-HEREDOC
+              subscribe_to #{record_class} do
+                def create_#{record_class.model_name.param_key}_successful(record)
+                  request_queues.each{|key, queue| queue << request(record.id)}
+                end
+              end
+            HEREDOC
+          end
+
           define_method(:record){record_type.constantize.find(record_id)}
         end
       end
