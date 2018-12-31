@@ -49,14 +49,10 @@ module Fragmentary
     module ClassMethods
 
       def root(options)
-        if options[:type].constantize.requestable?
-          klass, search_attributes, options = base_class.attributes(options)
-          fragment = klass.where(search_attributes).includes(:children).first_or_initialize(options); fragment.save if fragment.new_record?
-          fragment.set_indexed_children if fragment.child_search_key
-          fragment
-        else
-          raise RangeError, "#{options[:type]} is not a root fragment class"
-        end
+        klass, search_attributes, options = base_class.attributes(options)
+        fragment = klass.where(search_attributes).includes(:children).first_or_initialize(options); fragment.save if fragment.new_record?
+        fragment.set_indexed_children if fragment.child_search_key
+        fragment
       end
 
       # Each fragment record is unique by type and parent_id (which is nil for a root_fragment) and for some types also by
@@ -118,7 +114,7 @@ module Fragmentary
         if self == base_class
           @@request_queues
         else
-          return nil unless requestable?
+          return nil unless (requestable? or new.requestable?)
           user_types.each_with_object({}){|user_type, queues| queues[user_type] = @@request_queues[user_type]}
         end
       end
@@ -215,12 +211,12 @@ module Fragmentary
             end
           end
 
-          if respond_to? :request_path
+          if requestable?
             record_class = record_type.constantize
             instance_eval <<-HEREDOC
               subscribe_to #{record_class} do
                 def create_#{record_class.model_name.param_key}_successful(record)
-                  request_queues.each{|key, queue| queue << request(record.id)}
+                  queue_request(record.id)
                 end
               end
             HEREDOC
@@ -287,16 +283,7 @@ module Fragmentary
       end
 
       def requestable?
-        respond_to?(:request_path) || new.requestable?
-      end
-
-      # Subclasses that define a class method self.request_path also need to override this method
-      def request(*args)
-        if respond_to? :request_path
-          raise "You can't call Fragment.request for a subclass that defines 'request_path'. #{name} needs its own request implementation."
-       else
-          raise "There is no 'request' class method defined for the #{name} class."
-        end
+        respond_to?(:request)
       end
 
       # The instance method 'request_method' is defined in terms of this.
