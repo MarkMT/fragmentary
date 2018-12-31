@@ -216,7 +216,9 @@ module Fragmentary
             instance_eval <<-HEREDOC
               subscribe_to #{record_class} do
                 def create_#{record_class.model_name.param_key}_successful(record)
-                  queue_request(record.id)
+                  request = Fragmentary::Request.new(request_method, request_path(record.id),
+                                                     request_parameters(record.id), request_options)
+                  queue_request(request)
                 end
               end
             HEREDOC
@@ -275,10 +277,9 @@ module Fragmentary
         nil
       end
 
-      def queue_request(*args)
-        puts "  queue request for #{self.name}: #{args.inspect}"
-        if r = request(*args)
-          request_queues.each{|key, queue| queue << r}
+      def queue_request(request=nil)
+        if request
+          request_queues.each{|key, queue| queue << request}
         end
       end
 
