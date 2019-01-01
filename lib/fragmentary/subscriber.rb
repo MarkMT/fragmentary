@@ -24,7 +24,9 @@ module Fragmentary
 
     def subscribe_to(publisher, block)
       if subscriptions[publisher.name]
-        instance_exec(&block)
+        mod = Module.new
+        mod.module_exec(&block)
+        self.extend mod
       end
     end
 
