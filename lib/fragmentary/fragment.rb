@@ -284,7 +284,7 @@ module Fragmentary
       end
 
       def requestable?
-        respond_to?(:request)
+        respond_to?(:request_path)
       end
 
       # The instance method 'request_method' is defined in terms of this.
