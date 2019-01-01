@@ -30,7 +30,7 @@ module Fragmentary
 
         validate :root_id, :presence => true
 
-        cache_timestamp_format = :usec  # Not be needed for Rails 5, which uses :usec by default.
+        cache_timestamp_format = :usec  # Probably not needed for Rails 5, which uses :usec by default.
 
       end
 
@@ -119,8 +119,8 @@ module Fragmentary
         end
       end
 
-      def remove_queued_request(user:, record_id:)
-        request_queues[user_type(user)].remove_path(request_path(record_id))
+      def remove_queued_request(user:, request_path:)
+        request_queues[user_type(user)].remove_path(request_path)
       end
 
       def subscriber
