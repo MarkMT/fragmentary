@@ -456,7 +456,7 @@ Note that both `Fragment.root` and `Fragment#child` will instantiate a matching 
   <% end %>
 
   <% if child.memo == required_memo_value %>
-  <%= conditional_content %>
+    <%= conditional_content %>
   <% end %>
 
 <% else %>
