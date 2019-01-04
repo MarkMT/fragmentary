@@ -1,7 +1,7 @@
 module Fragmentary
 
   class Widget
-    attr_reader :template, :key, :match
+    attr_reader :template, :match
 
     def self.inherited subclass
       super if defined? super
@@ -18,7 +18,6 @@ module Fragmentary
 
     def initialize(template, key)
       @template = template
-      @key = key
       @match = key.match(pattern)
     end
 
