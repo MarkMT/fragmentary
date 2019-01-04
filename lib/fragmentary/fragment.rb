@@ -49,9 +49,13 @@ module Fragmentary
     module ClassMethods
 
       def root(options)
-        klass, search_attributes, options = base_class.attributes(options)
-        fragment = klass.where(search_attributes).includes(:children).first_or_initialize(options); fragment.save if fragment.new_record?
-        fragment.set_indexed_children if fragment.child_search_key
+        if fragment = options[:fragment]
+          raise ArgumentError, "You passed Fragment #{fragment.id} to Fragment.root, but it's a child of Fragment #{fragment.parent_id}" if fragment.parent_id
+        else
+          klass, search_attributes, options = base_class.attributes(options)
+          fragment = klass.where(search_attributes).includes(:children).first_or_initialize(options); fragment.save if fragment.new_record?
+          fragment.set_indexed_children if fragment.child_search_key
+        end
         fragment
       end
 
@@ -90,16 +94,21 @@ module Fragmentary
         @@cache_store ||= Rails.application.config.action_controller.cache_store
       end
 
+      # ToDo: combine this with Fragment.root
       def existing(options)
-        options.merge!(:type => name) unless self == base_class
-        raise ArgumentError, "A 'type' attribute is needed in order to retrieve a fragment" unless options[:type]
-        klass, search_attributes, options = base_class.attributes(options)
-        # We merge options because it may include :record_id, which may be needed for uniqueness even
-        # for classes that don't 'need_record_id' if the parent_id isn't available.
-        fragment = klass.where(search_attributes.merge(options)).includes(:children).first
-        # Unlike Fragment.root and Fragment#child we don't instantiate a record if none is found,
-        # so fragment may be nil.
-        fragment.try :set_indexed_children if fragment.try :child_search_key
+        if fragment = options[:fragment]
+          raise ArgumentError, "You passed Fragment #{fragment.id} to Fragment.existing, but it's a child of Fragment #{fragment.parent_id}" if fragment.parent_id
+        else
+          options.merge!(:type => name) unless self == base_class
+          raise ArgumentError, "A 'type' attribute is needed in order to retrieve a fragment" unless options[:type]
+          klass, search_attributes, options = base_class.attributes(options)
+          # We merge options because it may include :record_id, which may be needed for uniqueness even
+          # for classes that don't 'need_record_id' if the parent_id isn't available.
+          fragment = klass.where(search_attributes.merge(options)).includes(:children).first
+          # Unlike Fragment.root and Fragment#child we don't instantiate a record if none is found,
+          # so fragment may be nil.
+          fragment.try :set_indexed_children if fragment.try :child_search_key
+        end
         fragment
       end
 
@@ -389,7 +398,10 @@ module Fragmentary
     # rendered on its own, e.g. inserted by ajax into a parent that is already on the page. In this case the
     # children won't have already been loaded or indexed.
     def child(options)
-      begin
+      if child = options[:child]
+        raise ArgumentError, "You passed a child fragment to a parent it's not a child of." unless child.parent_id == self.id
+        child
+      else
         existing = options.delete(:existing)
         # root_id and parent_id are passed from parent to child. For all except root fragments, root_id is stored explicitly.
         derived_options = {:root_id => root_id || id}
@@ -419,10 +431,7 @@ module Fragmentary
           fragment_children = fragment.children
           fragment.set_indexed_children if fragment.child_search_key
         end
-
         fragment
-      rescue => e
-        Rails.logger.error e.message + "\n " + e.backtrace.join("\n ")
       end
     end
 

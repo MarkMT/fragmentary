@@ -157,7 +157,7 @@ A 'root' fragment is one that has no parent. In the template in which a root fra
 
 #### Nested Fragments
 
-The variable `fragment` that is yielded to the block above is an object of class `Fragmentary::FragmentsHelper::CacheBuilder`, which contains both the actual ActiveRecord fragment record found or created by `cache_fragment` *and* the current template as instance variables. Apart from its constructor and accessors, the class has one instance method, `cache_child` which can be used to define a child fragment nested within the first. The method is used _within_ a block of content defined by `cache_fragment` and much like `cache_fragment` it takes a hash of options that uniquely identify the child fragment. Also like `cache_fragment` it yields another `CacheBuilder` object and wraps a block containing the content of the child fragment to be cached.
+The variable `fragment` that is yielded to the block above is an object of class `Fragmentary::FragmentsHelper::CacheBuilder`, which contains both the actual ActiveRecord fragment record found or created by `cache_fragment` *and* the current template as instance variables. The class has one public instance method defined, `cache_child`, which can be used to define a child fragment nested within the first. The method is used _within_ a block of content defined by `cache_fragment` and much like `cache_fragment` it takes a hash of options that uniquely identify the child fragment. Also like `cache_fragment` it yields another `CacheBuilder` object and wraps a block containing the content of the child fragment to be cached.
 ```
 <% cache_fragment :type => 'ProductTemplate', :record_id => @product.id do |fragment| %>
   <% fragment.cache_child :type => 'StoresAvailable' do |child_fragment| %>

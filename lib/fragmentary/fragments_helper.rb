@@ -2,56 +2,49 @@ module Fragmentary
 
   module FragmentsHelper
 
-    def cache_fragment(options)
-      no_cache = options.delete(:no_cache)
-      options.reverse_merge!(:user => Template.new(self).current_user)
-      fragment = options.delete(:fragment) || Fragmentary::Fragment.base_class.root(options)
-      builder = CacheBuilder.new(fragment, template = self)
-      unless no_cache
-        cache fragment, :skip_digest => true do
-          yield(builder)
-        end
-      else
-        yield(builder)
-      end
-      self.output_buffer = WidgetParser.new(self).parse_buffer
+    def cache_fragment(options, &block)
+      CacheBuilder.new(self).cache_fragment(options, &block)
     end
 
     def fragment_builder(options)
       template = options.delete(:template)
       options.reverse_merge!(:user => Template.new(template).current_user)
-      CacheBuilder.new(Fragmentary::Fragment.base_class.existing(options), template)
+      CacheBuilder.new(template, Fragmentary::Fragment.base_class.existing(options))
     end
 
     class CacheBuilder
       include ::ActionView::Helpers::CacheHelper
       include ::ActionView::Helpers::TextHelper
 
-      attr_accessor :fragment, :template
-
-      def initialize(fragment, template)
+      def initialize(template, fragment = nil)
         @fragment = fragment
         @template = template
       end
 
-      def cache_child(options)
+      def cache_fragment(options, &block)
         no_cache = options.delete(:no_cache)
         insert_widgets = options.delete(:insert_widgets)
-        options.reverse_merge!(:user => Template.new(template).current_user)
-        child = options.delete(:child) || fragment.child(options)
-        builder = CacheBuilder.new(child, template)
+        options.reverse_merge!(:user => Template.new(@template).current_user)
+        # If the CacheBuilder was instantiated with an existing fragment, next_fragment is its child;
+        # otherwise it is the root fragment specified by the options provided.
+        next_fragment = @fragment.try(:child, options) || Fragmentary::Fragment.base_class.root(options)
+        builder = CacheBuilder.new(@template, next_fragment)
         unless no_cache
-          template.cache child, :skip_digest => true do
+          @template.cache next_fragment, :skip_digest => true do
             yield(builder)
           end
         else
           yield(builder)
         end
-        template.output_buffer = WidgetParser.new(template).parse_buffer if insert_widgets
+        @template.output_buffer = WidgetParser.new(@template).parse_buffer if (!@fragment || insert_widgets)
       end
 
+      alias cache_child cache_fragment
+
+      private
+
       def method_missing(method, *args)
-        fragment.send(method, *args)
+        @fragment.send(method, *args)
       end
 
     end
@@ -61,7 +54,6 @@ module Fragmentary
 
   # Just a wrapper to allow us to call a configurable current_user_method on the template
   class Template
-    attr_reader :template
 
     def initialize(template)
       @template = template
@@ -69,8 +61,8 @@ module Fragmentary
 
     def current_user
       return nil unless methd = Fragmentary.current_user_method
-      if template.respond_to? methd
-        template.send methd
+      if @template.respond_to? methd
+        @template.send methd
       else
         raise NoMethodError, "The current_user_method '#{methd.to_s}' specified doesn't exist"
       end
