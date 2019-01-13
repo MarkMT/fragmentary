@@ -16,6 +16,8 @@ module Fragmentary
       include ::ActionView::Helpers::CacheHelper
       include ::ActionView::Helpers::TextHelper
 
+      attr_reader :fragment
+
       def initialize(template, fragment = nil)
         @fragment = fragment
         @template = template
