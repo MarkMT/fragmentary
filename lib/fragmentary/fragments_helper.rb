@@ -7,7 +7,8 @@ module Fragmentary
     end
 
     def fragment_builder(options)
-      template = options.delete(:template)
+      # the template option is deprecated but avoids breaking prior usage
+      template = options.delete(:template) || self
       options.reverse_merge!(:user => Template.new(template).current_user)
       CacheBuilder.new(template, Fragmentary::Fragment.base_class.existing(options))
     end

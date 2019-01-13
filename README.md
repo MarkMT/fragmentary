@@ -710,9 +710,9 @@ However, it's possible for the partial to contain a cached fragment that happens
   </ul>
 <% end %>
 ```
-In the Javascript case, however, since the template only renders the new list item and not the list as a whole, there is no `cache_fragment` method invoked in order to yield the `CacheBuilder` object, and so we have to construct it explicitly. To do this, Fragmentary provides a helper method `fragment_builder` that takes an options hash containing the parameters that define the fragment (the same ones passed to `cache_fragment`) plus the current template and returns the `CacheBuilder` object that the partial needs.
+In the Javascript case, however, since the template only renders the new list item and not the list as a whole, there is no `cache_fragment` method invoked in order to yield the `CacheBuilder` object, and so we have to construct it explicitly. To do this, Fragmentary provides a helper method `fragment_builder` that takes an options hash containing the parameters that define the fragment (the same ones passed to `cache_fragment`) and returns the `CacheBuilder` object that the partial needs.
 ```
-<% parent_fragment = fragment_builder(:type => 'ProductList', :template => self) %>
+<% parent_fragment = fragment_builder(:type => 'ProductList') %>
 $('ul.product_list').append('<%= j(render 'product/summary', :product => @product,
                                                              :parent_fragment => parent_fragment) %>')
 ```
@@ -723,7 +723,7 @@ The second challenge in dealing with child fragments rendered without the contex
 
 To address this, `cache_child` can take an additional boolean option, `:insert_widgets` that can be used to force the insertion of widgets into the child. Typically a local variable containing the value of this option would be passed to the partial in which `cache_child` appears. In the Javascript template:
 ```
-<% parent_fragment = fragment_builder(:type => 'ProductList', :template => self) %>
+<% parent_fragment = fragment_builder(:type => 'ProductList') %>
 $('ul.product_list').append('<%= j(render 'product/summary', :product => @product,
                                                              :parent_fragment => parent_fragment,
                                                              :insert_widgets => true) %>')
