@@ -30,7 +30,7 @@ module Fragmentary
 
         validate :root_id, :presence => true
 
-        cache_timestamp_format = :usec  # Probably not needed for Rails 5, which uses :usec by default.
+        self.cache_timestamp_format = :usec  # Probably not needed for Rails 5, which uses :usec by default.
 
       end
 
