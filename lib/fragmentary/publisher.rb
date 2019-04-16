@@ -33,7 +33,7 @@ module Fragmentary
       end
 
       def after_update_broadcast
-        broadcast(:after_update, self) self.previous_changes.any?
+        broadcast(:after_update, self) if self.previous_changes.any?
       end
 
       def after_destroy_broadcast
