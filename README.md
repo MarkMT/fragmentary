@@ -601,7 +601,7 @@ class AvailableStore < Fragment
   class UpdateStoreHandler < Fragmentary::Handler
     def call
       product_stores = ProductStore.where(:store_id => @args[:id])
-      touch_fragment_for_record(product_stores)
+      touch_fragments_for_record(product_stores)
     end
   end
 
