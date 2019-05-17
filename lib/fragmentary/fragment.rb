@@ -271,7 +271,7 @@ module Fragmentary
       # hasn't yet been requested, e.g. an assumption created on an article page won't necessarily have been rendered on the
       # opinion analysis page.
       def touch_fragments_for_record(record_id)
-        fragments_for_record(record_id).each(&:touch)
+        fragments_for_record(record_id).includes({:parent => :parent}).each(&:touch)
       end
 
       def fragments_for_record(record_id)
@@ -475,10 +475,13 @@ module Fragmentary
       touch(:no_request => no_request) unless children.any?
     end
 
+    # Touch this fragment and all descendants that have entries in the cache. Destroy any that
+    # don't have cache entries.
     def touch_or_destroy
       puts "  touch_or_destroy #{self.class.name} #{id}"
       if cache_exist?
         children.each(&:touch_or_destroy)
+        # if there are children, this will be touched automatically once they are.
         touch(:no_request => true) unless children.any?
       else
         destroy  # will also destroy all children because of :dependent => :destroy

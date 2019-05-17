@@ -31,7 +31,7 @@ module Fragmentary
             widget._content
           end
         else
-          "Oops! Widget not found."
+          "Oops! Widget for #{widget_key} not found."
         end
       end
       # The gsub replaces instances of '%' that aren't part of widget specifications with '%%', preventing
