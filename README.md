@@ -310,9 +310,16 @@ Whether you specify the user type mapping in Fragmentary's configuration or in a
 
 
 #### Per-User Customization
-While storing different versions of fragments is a workable solution for different groups of users, sometimes content needs to be customized for individual users. Doing this at any realistic scale would likely introduce significant cost and performance challenges. To address this we provide a way for user-specific content (in general any content) to be inserted into a cached fragment _after_ it has been retrieved from the cache through the use of a special placeholder string in a view template.
+While storing different versions of fragments is a workable solution for different groups of users, sometimes content needs to be customized for individual users. It is _possible_ to accomplish this by defining a fragment subclass with the declaration `needs_user_id`:
+```
+class MyFragment < Fragment
+  needs_user_id
+  ...
+end
+```
+You will also need to include a `user_id` column in the migration used to create your fragments database table. The `needs_user_id` declaration will result in separate fragments being created for each individual user. As in the case of `needs_user_type`, the `user_id` parameter is automatically extracted from your configured (or default) `current_user_method`.
 
-To accomplish this, two classes are defined, `Fragmentary::Widget` and a subclass `Fragmentary::UserWidget`. Instances of these classes represent chunks of content that will be inserted into a fragment after it has been either rendered and stored or retrieved from the cache. For each type of insertable content you wish your application to support, define a specific subclass of one of these classes (`UserWidget` is preferred if the content is to be user-specific) with two instance methods:
+However this approach is _not_ generally recommended as doing so at any realistic scale is likely to introduce significant cost and performance challenges. Instead, we provide a way for user-specific content (in general any content) to be inserted into a cached fragment _after_ it has been retrieved from the cache through the use of a special placeholder string in a view template. To accomplish this, two classes are defined, `Fragmentary::Widget` and a subclass `Fragmentary::UserWidget`. Instances of these classes represent chunks of content that will be inserted into a fragment after it has been either rendered and stored or retrieved from the cache. For each type of insertable content you wish your application to support, define a specific subclass of one of these classes (`UserWidget` is preferred if the content is to be user-specific) with two instance methods:
 - `pattern`, which returns a `Regexp` that will be used to detect a placeholder you will use in your template at the point where you wish the inserted content to be placed. The placeholder consists of a string matching the regular expression you specify wrapped in special delimiter characters `%{...}`.
 - `content`, which returns the string that will be inserted in place of the placeholder.
 
@@ -412,7 +419,15 @@ Of course if you have to render the content in order to determine whether it nee
 <% end %>
 ```
 
-Note the use above of the method `Fragment.root` to retrieve the fragment after caching has occurred. The method takes the same parameters as `cache_fragment` and returns a matching fragment (calling the method after caching guarantees that it will exist since caching instantiates the fragment if it doesn't already exist). We have to retrieve the fragment explicitly since the variable `fragment` is local to the block to which it is yielded. Also note that although `fragment` is actually a `CacheBuilder` object, that class uses `method_missing` to pass any methods, such as `update_attribute`, to the underlying fragment.
+Note that we update the fragment's `memo` attribute by calling `update_attribute` on the `fragment` object. Although this is actually a `CacheBuilder` object, that class passes any methods such as `update_attribute`, to the underlying fragment.
+
+Also note the use above of the method `Fragment.root` to retrieve the fragment matching the supplied parameters after caching has occurred. We have to retrieve the fragment explicitly since the variable `fragment` is local to the `cache_fragment` block to which it is yielded. The method takes the same parameters as `cache_fragment` with one exception: At present, if your fragment class declares `needs_user_type` or `needs_user_id`, you need to explicitly pass either the respective parameter or the current user object (this may change in a future release). e.g.
+
+```
+...
+<% root_fragment = Fragment.root(:type => 'ProductTemplate', :record_id => @product.id, :user => current_user).memo == required_memo_value %>
+...
+```
 
 The process for child fragments is similar, except that an instance method Fragment#child can be called on the parent fragment in order to retrieve the fragment to be tested. e.g.
 
@@ -430,7 +445,7 @@ The process for child fragments is similar, except that an instance method Fragm
 <% end %>
 ```
 
-In both of these examples, the fragment to be tested is retrieved after caching. If relying on side-effects doesn't make you too queasy, you can alternatively retrieve it before caching, in which case the fragment can be passed to `cache_fragment` or `cache_child` as appropriate instead of the set of fragment attributes we used before. This avoids the need for `cache_fragment` or `cache_child` to retrieve the fragment internally. e.g.
+In both of these examples, the fragment to be tested is retrieved after caching. If relying on side-effects doesn't make you too queasy, you can alternatively retrieve it before caching, in which case the retrieved fragment can be passed to `cache_fragment` or `cache_child` as appropriate instead of the set of fragment attributes we used before. This avoids the need for `cache_fragment` or `cache_child` to retrieve the fragment themselves internally, e.g.
 ```
 <% root_fragment = Fragment.root(:type => 'ProductTemplate', :record_id => @product.id) %>
 <% conditional_content = capture do  %>
