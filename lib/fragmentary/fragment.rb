@@ -28,7 +28,7 @@ module Fragmentary
 
         attr_accessor :indexed_children
 
-        validate :root_id, :presence => true
+        validates :root_id, :presence => true
 
         self.cache_timestamp_format = :usec  # Probably not needed for Rails 5, which uses :usec by default.
 
