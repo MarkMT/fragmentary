@@ -419,7 +419,7 @@ Of course if you have to render the content in order to determine whether it nee
 <% end %>
 ```
 
-Note that we update the fragment's `memo` attribute by calling `update_attribute` on the `fragment` object. Although this is actually a `CacheBuilder` object, that class passes any methods such as `update_attribute`, to the underlying fragment.
+Note that we update the fragment's `memo` attribute by calling `update_attribute` on the `fragment` object. Although this is actually a `CacheBuilder` object, that class passes any methods such as `update_attribute` to the underlying fragment.
 
 Also note the use above of the method `Fragment.root` to retrieve the fragment matching the supplied parameters after caching has occurred. We have to retrieve the fragment explicitly since the variable `fragment` is local to the `cache_fragment` block to which it is yielded. The method takes the same parameters as `cache_fragment` with one exception: At present, if your fragment class declares `needs_user_type` or `needs_user_id`, you need to explicitly pass either the respective parameter or the current user object (this may change in a future release). e.g.
 
