@@ -146,7 +146,7 @@ module Fragmentary
       # create or retrieve a Fragment of that class. A user_id is needed for example when caching user-specific content
       # such as a user profile. When the fragment is instantiated using FragmentsHelper methods 'cache_fragment' or
       # 'CacheBuilder.cache_child', a :user option is added to the options hash automatically from the value of 'current_user'.
-      # The user_id is extracted from this option in Fragment.find_or_create.
+      # The user_id is extracted from this option in Fragment.attributes.
       def needs_user_id
         self.extend NeedsUserId
       end
@@ -156,7 +156,7 @@ module Fragmentary
       # differently depending on the type of user, e.g. to distinguish between content seen by signed in users and those not
       # signed in. When the fragment is instantiated using FragmentsHelper methods 'cache_fragment' or 'CacheBuilder.cache_child',
       # a :user option is added to the options hash automatically from the value of 'current_user'. The user_type is extracted
-      # from this option in Fragment.find_or_create.
+      # from this option in Fragment.attributes.
       def needs_user_type(options = {})
         self.extend NeedsUserType
         instance_eval do
