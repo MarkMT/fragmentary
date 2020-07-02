@@ -1,3 +1,10 @@
+### 0.2.1
+- Fixes a syntax bug in validating a fragment's root_id
+- Adds README documentation on the use of methods for explicitly retreving user-dependent fragments.
+- Adds README documentation on the needs_user_id declaration
+- Deprecates the :template parameter in FragmentsHelper#fragment_builder
+- Adds minor performance enhancements
+
 ### 0.2.0
 - Makes the following configurable:
   - current_user_method - called on current template to obtain the current authenticated user.
