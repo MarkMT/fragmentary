@@ -28,9 +28,10 @@ module Fragmentary
 
         attr_accessor :indexed_children
 
-        validates :root_id, :presence => true
-
-        self.cache_timestamp_format = :usec  # Probably not needed for Rails 5, which uses :usec by default.
+        # Set cache timestamp format to :usec instead of :nsec because the latter is greater precision than Postgres supports,
+        # resulting in mismatches between timestamps on a newly created fragment and one retrieved from the database.
+        # Probably not needed for Rails 5, which uses :usec by default.
+        self.cache_timestamp_format = :usec
 
       end
 
