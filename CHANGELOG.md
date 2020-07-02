@@ -1,3 +1,6 @@
+### 0.2.2
+- Removes validation of the fragment's root_id (only relevant to child fragments); ignore v0.2.1
+
 ### 0.2.1
 - Fixes a syntax bug in validating a fragment's root_id
 - Adds README documentation on the use of methods for explicitly retreving user-dependent fragments.
