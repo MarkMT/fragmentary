@@ -73,8 +73,14 @@ module Fragmentary
         # Collect the attributes to be used when searching for an existing fragment. Fragments are unique by these values.
         search_attributes = {}
 
-        parent_id = options.delete(:parent_id)
-        search_attributes.merge!(:parent_id => parent_id) if parent_id
+        if (parent_id = options.delete(:parent_id))
+          search_attributes.merge!(:parent_id => parent_id)
+        else
+          application_root_url_column = Fragmentary.config.application_root_url_column
+          if (application_root_url = options.delete(application_root_url_column)) && column_names.include?(application_root_url_column.to_s)
+            search_attributes.merge!(application_root_url_column => application_root_url)
+          end
+        end
 
         [:record_id, :user_id, :user_type, :key].each do |attribute_name|
           if klass.needs?(attribute_name)
@@ -117,20 +123,53 @@ module Fragmentary
         self
       end
 
+      # There is one queue per user_type per application instance (the current app and any external instances). The queues
+      # for all fragments are held in common by the Fragment base class but are indexed on a subclass basis by an individual
+      # subclass's user_types. As well as being accessible here as Fragment.request_queues, the queues are also available
+      # without indexation as RequestQueue.all.
       def request_queues
-        @@request_queues ||= Hash.new do |hash, user_type|
-          hash[user_type] = RequestQueue.new(user_type)
-        end
-        if self == base_class
-          @@request_queues
-        else
-          return nil unless (requestable? or new.requestable?)
-          user_types.each_with_object({}){|user_type, queues| queues[user_type] = @@request_queues[user_type]}
+        app_root_url = Rails.application.routes.url_helpers.root_url
+        @@request_queues ||= Hash.new do |hsh, host_url|
+          hsh[host_url] = Hash.new do |hsh2, user_type|
+            # app_root_url is "http://...";  host_url is potentially "https://..."
+            if host_url.match(/https?:\/\/(.*\w)(\/)?$/) == app_root_url.match(/https?:\/\/(.*\w)(\/)?$/)
+              hsh2[user_type] = InternalRequestQueue.new(user_type)
+            else
+              hsh2[user_type] = ExternalRequestQueue.new(user_type, host_url)
+            end
+          end
         end
       end
 
+      # Subclass-specific request_queues
+      def inherited(subclass)
+        subclass.instance_eval do
+
+          def request_queues
+            super  # ensure that @@request_queues has been defined
+            @request_queues ||= begin
+              app_root_url = Rails.application.routes.url_helpers.root_url
+              remote_urls = Fragmentary.config.remote_urls
+              user_types.each_with_object( Hash.new {|hsh0, url| hsh0[url] = {}} ) do |user_type, hsh|
+                # Internal request queues
+                hsh[app_root_url][user_type] = @@request_queues[app_root_url][user_type]
+                # External request queues
+                if remote_urls.any?
+                  unless Rails.application.routes.default_url_options[:host]
+                    raise "Can't create external request queues without setting Rails.application.routes.default_url_options[:host]"
+                  end
+                  remote_urls.each {|remote_url| hsh[remote_url][user_type] = @@request_queues[remote_url][user_type]}
+                end
+              end
+            end
+          end
+
+        end
+        super
+      end
+
       def remove_queued_request(user:, request_path:)
-        request_queues[user_type(user)].remove_path(request_path)
+        request_queues.each{|key, hsh| hsh[user_type(user)].remove_path(request_path)}
       end
 
       def subscriber
@@ -158,6 +197,11 @@ module Fragmentary
       # signed in. When the fragment is instantiated using FragmentsHelper methods 'cache_fragment' or 'CacheBuilder.cache_child',
       # a :user option is added to the options hash automatically from the value of 'current_user'. The user_type is extracted
       # from this option in Fragment.attributes.
+      #
+      # For each class that declares 'needs_user_type', a set of user_types is defined that determines the set of request_queues
+      # that will be used to send requests to the application when a fragment is touched. By default these user_types are defined
+      # globally using 'Fragmentary.setup' but they can alternatively be set on a class-specific basis by passing a :session_users
+      # option to 'needs_user_type'. See 'Fragmentary.parse_session_users' for details.
       def needs_user_type(options = {})
         self.extend NeedsUserType
         instance_eval do
@@ -288,9 +332,7 @@ module Fragmentary
       end
 
       def queue_request(request=nil)
-        if request
-          request_queues.each{|key, queue| queue << request}
-        end
+        request_queues.each{|key, hsh| hsh.each{|key2, queue| queue << request}} if request
       end
 
       def requestable?
@@ -453,7 +495,7 @@ module Fragmentary
     end
 
     def touch(*args, no_request: false)
-      request_queues.each{|key, queue| queue << request} if request && !no_request
+      request_queues.each{|key, hsh| hsh.each{|key2, queue| queue << request}} if request && !no_request
       super(*args)
     end
 

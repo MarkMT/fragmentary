@@ -33,7 +33,9 @@ module Fragmentary
       end
 
       def after_update_broadcast
+        Rails.logger.info "\n***** #{start = Time.now} broadcasting :after_update from #{self.class.name} #{self.id}\n"
         broadcast(:after_update, self) if self.previous_changes.any?
+        Rails.logger.info "\n***** #{Time.now} broadcast :after_update from #{self.class.name} #{self.id} took #{(Time.now - start) * 1000} ms\n"
       end
 
       def after_destroy_broadcast
