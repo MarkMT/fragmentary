@@ -265,18 +265,18 @@ module Fragmentary
             end
           end
 
-          if requestable?
-            record_class = record_type.constantize
-            instance_eval <<-HEREDOC
-              subscribe_to #{record_class} do
-                def create_#{record_class.model_name.param_key}_successful(record)
+          record_class = record_type.constantize
+          instance_eval <<-HEREDOC
+            subscribe_to #{record_class} do
+              def create_#{record_class.model_name.param_key}_successful(record)
+                if requestable?
                   request = Fragmentary::Request.new(request_method, request_path(record.id),
                                                      request_parameters(record.id), request_options)
                   queue_request(request)
                 end
               end
-            HEREDOC
-          end
+            end
+          HEREDOC
 
           define_method(:record){record_type.constantize.find(record_id)}
         end
