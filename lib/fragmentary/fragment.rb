@@ -350,7 +350,7 @@ module Fragmentary
 
       # The instance method 'request_options' is defined in terms of this.
       def request_options
-        nil
+        {}
       end
 
       # This method defines the handler for the creation of new list items. The method takes:

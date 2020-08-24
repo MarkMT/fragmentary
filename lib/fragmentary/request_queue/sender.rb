@@ -17,7 +17,6 @@ module Fragmentary
       end
 
       def session
-        puts "***** get session"
         @session ||= new_session
       end
 

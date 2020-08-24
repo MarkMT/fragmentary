@@ -8,43 +8,82 @@ module Fragmentary
 
     include Rails::ConsoleMethods
 
-    def initialize(user, &block)
-      puts "***** instantiate session"
+    def initialize(user=nil, &block)
       # app is from Rails::ConsoleMethods. It returns an object ActionDispatch::Integration::Session.new(Rails.application)
       # with some extensions. See https://github.com/rails/rails/blob/master/railties/lib/rails/console/app.rb
       # The session object has instance methods get, post etc.
       # See https://github.com/rails/rails/blob/master/actionpack/lib/action_dispatch/testing/integration.rb
       @session = app
-      @credentials = session_credentials(user)
-      puts "***** credentials #{@credentials.inspect}"
-      sign_in if @credentials
+      @user = user
+      @session.host! session_host
+      sign_in if session_credentials
       instance_eval(&block) if block_given?
     end
 
-    def session_credentials(user)
-      credentials = user.try(:credentials)
-      credentials.is_a?(Proc) ? credentials.call : credentials
+    def session_host
+      @session_host ||= begin
+        match = Rails.application.routes.url_helpers.root_url.match(/https?:\/\/([\w\.]*)(:(\d*))?/)
+        host, port = match[1], match[3]
+        host + (port ? ":#{port}" : "")
+      end
+    end
+
+    def session_sign_in_path
+      @sign_in_path ||= Fragmentary.config.get_sign_in_path
+    end
+
+    def session_sign_out_path
+      @sign_out_path ||= Fragmentary.config.sign_out_path
+    end
+
+    def session_credentials
+      return nil unless @user
+      @credentials ||= begin
+        credentials = @user.credentials
+        credentials.is_a?(Proc) ? credentials.call : credentials
+      end
+    end
+
+    def relative_url_root
+      @relative_url_root ||= Rails.application.routes.relative_url_root
+    end
+
+    def session_options
+      @session_options ||= relative_url_root ? {'SCRIPT_NAME' => relative_url_root} : {}
     end
 
     def method_missing(method, *args)
       @session.send(method, *args)
     end
 
-    def sign_out
-      post Fragmentary.config.sign_out_path, {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}
-    end
-
     def sign_in
-      get Fragmentary.config.get_sign_in_path  # necessary in order to get the csrf token
+      raise "Can't sign in without user credentials" unless session_credentials
+      get session_sign_in_path, nil, session_options  # necessary in order to get the csrf token
       # NOTE: In Rails 5, params is changed to a named argument, i.e. :params => {...}. Will need to be changed.
       # Note that request is called on session, returning an ActionDispatch::Request; request.session is an ActionDispatch::Request::Session
-      puts "      * Signing in as #{@credentials.inspect}"
-      post Fragmentary.config.post_sign_in_path, @credentials.merge(:authenticity_token => request.session[:_csrf_token])
+      puts "      * Signing in as #{session_credentials.inspect}"
+      post session_sign_in_path, session_credentials.merge(:authenticity_token => request.session[:_csrf_token]), session_options
       if @session.redirect?
         follow_redirect!
       else
         raise "Sign in failed with credentials #{@credentials.inspect}"
       end
+    end
+
+    def follow_redirect!
+      raise "not a redirect! #{status} #{status_message}" unless redirect?
+      if (url = response.location) =~ %r{://}
+        destination = URI.parse(url)
+        path = destination.query ? "#{destination.path}?#{destination.query}" : destination.path
+      end
+      path = relative_url_root ? path.gsub(Regexp.new("^#{relative_url_root}"), "") : path
+      get(path, nil, session_options)
+      status
+    end
+
+    def sign_out
+      options = relative_url_root ? {'SCRIPT_NAME' => relative_url_root} : {}
+      post session_sign_out_path, {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}, session_options
     end
 
   end

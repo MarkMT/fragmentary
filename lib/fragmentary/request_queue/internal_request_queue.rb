@@ -11,19 +11,22 @@ module Fragmentary
     class Sender < RequestQueue::Sender
 
       def new_session
-        puts "***** get new session"
         UserSession.new(session_user)
       end
 
       def send_next_request
         if queue.size > 0
           request = queue.next_request
-          if request.options.try(:[], :xhr)
+          options = request.options
+          if relative_url_root = Rails.application.routes.relative_url_root
+            options.merge!('SCRIPT_NAME' => relative_url_root)
+          end
+          if options.try(:[], :xhr)
             puts "      * Sending xhr request '#{request.method.to_s} #{request.path}'" + (!request.parameters.nil? ? " with #{request.parameters.inspect}" : "")
-            session.send(:xhr, request.method, request.path, request.parameters, request.options)
+            session.send(:xhr, request.method, request.path, request.parameters, options)
           else
             puts "      * Sending request '#{request.method.to_s} #{request.path}'" + (!request.parameters.nil? ? " with #{request.parameters.inspect}" : "")
-            session.send(request.method, request.path, request.parameters, request.options)
+            session.send(request.method, request.path, request.parameters, options)
           end
         end
       end
