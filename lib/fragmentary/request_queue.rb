@@ -6,7 +6,7 @@ module Fragmentary
       @@all ||= []
     end
 
-    attr_reader :requests, :user_type
+    attr_reader :requests, :user_type, :root_url
 
     def initialize(user_type, root_url = nil)
       @user_type = user_type
