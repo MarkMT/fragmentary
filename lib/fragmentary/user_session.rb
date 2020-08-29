@@ -117,7 +117,9 @@ module Fragmentary
       else
         puts "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
       end
-      path = @relative_url_root + path
+      unless path =~ %r{://}
+        path = @relative_url_root + path
+      end
       cookies = @cookie ? {@cookie.name.to_sym => @cookie.value} : {}
       headers = options.try(:delete, :headers) || {}
       headers.merge!({:'X-Requested-With' => 'XMLHttpRequest'}) if options.try(:delete, :xhr)
