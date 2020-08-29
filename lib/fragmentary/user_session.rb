@@ -87,10 +87,10 @@ module Fragmentary
       end
       if options.try(:[], :xhr)
         puts "      * Sending xhr request '#{request.method.to_s} #{request.path}'" + (!request.parameters.nil? ? " with #{request.parameters.inspect}" : "")
-        session.send(:xhr, method, path, parameters, options)
+        @session.send(:xhr, method, path, parameters, options)
       else
         puts "      * Sending request '#{request.method.to_s} #{request.path}'" + (!request.parameters.nil? ? " with #{request.parameters.inspect}" : "")
-        session.send(method, path, parameters, options)
+        @session.send(method, path, parameters, options)
       end
     end
 
