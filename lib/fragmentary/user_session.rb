@@ -103,8 +103,9 @@ module Fragmentary
 
   class ExternalUserSession
 
-    def initialize(user, application_root_path = 'https://persuasivethinking.com')
-      @session = HTTP.persistent(application_root_path)
+    def initialize(user, root_url)
+      @relative_url_root = URI.parse(root_url).path
+      @session = HTTP.persistent(root_url)
       @cookie = nil
       @authenticity_token = nil
       sign_in if @credentials = session_credentials(user)
@@ -116,6 +117,7 @@ module Fragmentary
       else
         puts "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
       end
+      path = @relative_url_root + path
       cookies = @cookie ? {@cookie.name.to_sym => @cookie.value} : {}
       headers = options.try(:delete, :headers) || {}
       headers.merge!({:'X-Requested-With' => 'XMLHttpRequest'}) if options.try(:delete, :xhr)
