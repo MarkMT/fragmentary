@@ -133,9 +133,9 @@ module Fragmentary
           hsh[host_url] = Hash.new do |hsh2, user_type|
             # app_root_url is "http://...";  host_url is potentially "https://..."
             if host_url.match(/https?:\/\/(.*\w)(\/)?$/) == app_root_url.match(/https?:\/\/(.*\w)(\/)?$/)
-              hsh2[user_type] = InternalRequestQueue.new(user_type)
+              hsh2[user_type] = RequestQueue.new(user_type)
             else
-              hsh2[user_type] = ExternalRequestQueue.new(user_type, host_url)
+              hsh2[user_type] = RequestQueue.new(user_type, host_url)
             end
           end
         end

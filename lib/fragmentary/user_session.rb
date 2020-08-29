@@ -4,7 +4,7 @@ require 'nokogiri'
 
 module Fragmentary
 
-  class UserSession
+  class InternalUserSession
 
     include Rails::ConsoleMethods
 
@@ -81,6 +81,19 @@ module Fragmentary
       status
     end
 
+    def send_request(method:, path:, parameters: nil, options: {})
+      if relative_url_root = Rails.application.routes.relative_url_root
+        options.merge!('SCRIPT_NAME' => relative_url_root)
+      end
+      if options.try(:[], :xhr)
+        puts "      * Sending xhr request '#{request.method.to_s} #{request.path}'" + (!request.parameters.nil? ? " with #{request.parameters.inspect}" : "")
+        session.send(:xhr, method, path, parameters, options)
+      else
+        puts "      * Sending request '#{request.method.to_s} #{request.path}'" + (!request.parameters.nil? ? " with #{request.parameters.inspect}" : "")
+        session.send(method, path, parameters, options)
+      end
+    end
+
     def sign_out
       options = relative_url_root ? {'SCRIPT_NAME' => relative_url_root} : {}
       post session_sign_out_path, {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}, session_options
@@ -98,6 +111,11 @@ module Fragmentary
     end
 
     def send_request(method:, path:, parameters: nil, options: {})
+      if options.try(:[], :xhr)
+        puts "      * Sending xhr request '#{method.to_s} #{path}'" + (!request.parameters.nil? ? " with #{parameters.inspect}" : "")
+      else
+        puts "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
+      end
       cookies = @cookie ? {@cookie.name.to_sym => @cookie.value} : {}
       headers = options.try(:delete, :headers) || {}
       headers.merge!({:'X-Requested-With' => 'XMLHttpRequest'}) if options.try(:delete, :xhr)
