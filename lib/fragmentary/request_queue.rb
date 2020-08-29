@@ -1,7 +1,3 @@
-require 'fragmentary/request_queue/sender'
-require 'fragmentary/request_queue/internal_request_queue'
-require 'fragmentary/request_queue/external_request_queue'
-
 module Fragmentary
 
   class RequestQueue
