@@ -8,24 +8,21 @@ module Fragmentary
 
     include Rails::ConsoleMethods
 
-    def initialize(user=nil, &block)
+    def initialize(target, user=nil, &block)
       # app is from Rails::ConsoleMethods. It returns an object ActionDispatch::Integration::Session.new(Rails.application)
       # with some extensions. See https://github.com/rails/rails/blob/master/railties/lib/rails/console/app.rb
       # The session object has instance methods get, post etc.
       # See https://github.com/rails/rails/blob/master/actionpack/lib/action_dispatch/testing/integration.rb
       @session = app
       @user = user
+      @target = target
       @session.host! session_host
       sign_in if session_credentials
       instance_eval(&block) if block_given?
     end
 
     def session_host
-      @session_host ||= begin
-        match = Rails.application.routes.url_helpers.root_url.match(/https?:\/\/([\w\.]*)(:(\d*))?/)
-        host, port = match[1], match[3]
-        host + (port ? ":#{port}" : "")
-      end
+      @session_host ||= @target.host + (port=@target.port ? ":#{port}" : "")
     end
 
     def session_sign_in_path
@@ -104,9 +101,9 @@ module Fragmentary
 
   class ExternalUserSession
 
-    def initialize(user, root_url)
-      @relative_url_root = URI.parse(root_url).path
-      @session = HTTP.persistent(root_url)
+    def initialize(target, user=nil)
+      @relative_url_root = target.path
+      @session = HTTP.persistent(target.to_s)
       @cookie = nil
       @authenticity_token = nil
       sign_in if @credentials = session_credentials(user)

@@ -6,11 +6,14 @@ module Fragmentary
       @@all ||= []
     end
 
-    attr_reader :requests, :user_type, :root_url
+    attr_reader :requests, :user_type, :host_root_url
 
-    def initialize(user_type, root_url = nil)
+    def initialize(user_type, host_root_url)
       @user_type = user_type
-      @root_url = root_url
+      # host_root_url represents where the queued *requests* are to be processed. For internal sessions it also represents where
+      # the *queue* will be processed by delayed_job. For external requests, the queue will be processed by the host creating the
+      # queue and the requests will be explicitly sent to the host_root_url.
+      @host_root_url = host_root_url
       @requests = []
       self.class.all << self
     end
@@ -58,10 +61,28 @@ module Fragmentary
         end
       end
 
+      class AppInstance
+        def initialize(url)
+          @url = URI.parse(url)
+        end
+
+        def key
+          "#{@url.host}:#{@url.port}"
+        end
+
+        def queue_name
+          to_s.gsub(%r{https?://}, '')
+        end
+
+        delegate :host, :port, :path, :scheme, :to_s, :to => :@url
+      end
+
       attr_reader :queue
 
       def initialize(queue)
         @queue = queue
+        @this_instance = AppInstance.new(Rails.application.routes.url_helpers.root_url)
+        @target_instance = AppInstance.new(queue.host_root_url)
       end
 
       def session_user
@@ -69,11 +90,7 @@ module Fragmentary
       end
 
       def session
-        if root_url = queue.root_url
-          @session ||= ExternalUserSession.new(session_user, root_url)
-        else
-          @session ||= InternalUserSession.new(session_user)
-        end
+        @session ||= InternalUserSession.new(@target_instance, session_user)
       end
 
       # Send all requests, either directly or by schedule
@@ -119,7 +136,7 @@ module Fragmentary
           clear_session
           Delayed::Job.transaction do
             self.class.jobs.destroy_all
-            Delayed::Job.enqueue self, :run_at => delay.from_now
+            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target_instance.queue_name
           end
         end
       end

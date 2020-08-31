@@ -131,12 +131,7 @@ module Fragmentary
         app_root_url = Rails.application.routes.url_helpers.root_url
         @@request_queues ||= Hash.new do |hsh, host_url|
           hsh[host_url] = Hash.new do |hsh2, user_type|
-            # app_root_url is "http://...";  host_url is potentially "https://..."
-            if host_url.match(/https?:\/\/(.*\w)(\/)?$/) == app_root_url.match(/https?:\/\/(.*\w)(\/)?$/)
-              hsh2[user_type] = RequestQueue.new(user_type)
-            else
-              hsh2[user_type] = RequestQueue.new(user_type, host_url)
-            end
+            hsh2[user_type] = RequestQueue.new(user_type, host_url)
           end
         end
       end
