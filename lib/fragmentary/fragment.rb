@@ -24,8 +24,6 @@ module Fragmentary
         # redundant duplicate request.
         after_commit :touch_parent, :on => [:update, :destroy]
 
-        attr_accessible :parent_id, :root_id, :record_id, :user_id, :user_type, :key
-
         attr_accessor :indexed_children
 
         # Set cache timestamp format to :usec instead of :nsec because the latter is greater precision than Postgres supports,
