@@ -124,12 +124,17 @@ module Fragmentary
       end
 
       # There is one queue per user_type per application instance (the current app and any external instances). The queues
-      # for all fragments are held in common by the Fragment base class but are indexed on a subclass basis by an individual
-      # subclass's user_types. As well as being accessible here as Fragment.request_queues, the queues are also available
-      # without indexation as RequestQueue.all.
+      # for all fragments are held in common by the Fragment base class here in @@request_queues but are also indexed on a
+      # subclass basis by an individual subclass's user_types (see the inherited hook below). As well as being accessible
+      # here as Fragment.request_queues, the queues are also available without indexation as RequestQueue.all.
       def request_queues
-        app_root_url = Rails.application.routes.url_helpers.root_url
         @@request_queues ||= Hash.new do |hsh, host_url|
+          # As well as acting as a hash key to index the set of request queues for a given target application instance
+          # (for which its uniqueness is the only requirement), host_url is also passed to the RequestQueue constructor,
+          # from which it is used:
+          #   (i) by the RequestQueue::Sender to derive the name of the delayed_job queue that will be used to process the
+          #       queued requests if the sender is invoked in asynchronous mode - see RequestQueue::Sender#schedulerequests.
+          #   (ii) by the Fragmentary::InternalUserSession instantiated by the Sender to configure the session_host.
           hsh[host_url] = Hash.new do |hsh2, user_type|
             hsh2[user_type] = RequestQueue.new(user_type, host_url)
           end
