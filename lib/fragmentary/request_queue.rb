@@ -66,10 +66,6 @@ module Fragmentary
           @url = URI.parse(url)
         end
 
-        def key
-          "#{@url.host}:#{@url.port}"
-        end
-
         def queue_name
           to_s.gsub(%r{https?://}, '')
         end
@@ -81,7 +77,6 @@ module Fragmentary
 
       def initialize(queue)
         @queue = queue
-        @this_instance = AppInstance.new(Rails.application.routes.url_helpers.root_url)
         @target_instance = AppInstance.new(queue.host_root_url)
       end
 
