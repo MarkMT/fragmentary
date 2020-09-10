@@ -46,7 +46,7 @@ module Fragmentary
     end
 
     def session_options
-      @session_options ||= relative_url_root ? {'SCRIPT_NAME' => relative_url_root} : {}
+      @session_options ||= relative_url_root ? {:env => {'SCRIPT_NAME' => relative_url_root}} : {}
     end
 
     def method_missing(method, *args)
@@ -55,11 +55,12 @@ module Fragmentary
 
     def sign_in
       raise "Can't sign in without user credentials" unless session_credentials
-      get session_sign_in_path, nil, session_options  # necessary in order to get the csrf token
+      send_request(:method => :get, :path => session_sign_in_path, :options => session_options)  # necessary in order to get the csrf token
       # NOTE: In Rails 5, params is changed to a named argument, i.e. :params => {...}. Will need to be changed.
       # Note that request is called on session, returning an ActionDispatch::Request; request.session is an ActionDispatch::Request::Session
       puts "      * Signing in as #{session_credentials.inspect}"
-      post session_sign_in_path, session_credentials.merge(:authenticity_token => request.session[:_csrf_token]), session_options
+      parameters = session_credentials.merge(:authenticity_token => request.session[:_csrf_token])
+      send_request(:method => :post, :path => session_sign_in_path, :parameters => parameters, :options => session_options)
       if @session.redirect?
         follow_redirect!
       else
@@ -74,27 +75,25 @@ module Fragmentary
         path = destination.query ? "#{destination.path}?#{destination.query}" : destination.path
       end
       path = relative_url_root ? path.gsub(Regexp.new("^#{relative_url_root}"), "") : path
-      get(path, nil, session_options)
+      send_request(:method => :get, :path => path, :options => session_options)
       status
     end
 
     def send_request(method:, path:, parameters: nil, options: {})
-      if relative_url_root = Rails.application.routes.relative_url_root
-        options.merge!('SCRIPT_NAME' => relative_url_root)
-      end
+      options.merge!({:params => parameters})
+      options.merge!(session_options)
       if options.try(:[], :xhr)
         Rails.logger.info "      * Sending xhr request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
-        @session.send(:xhr, method, path, parameters, options)
       else
         Rails.logger.info "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
-        @session.send(method, path, parameters, options)
       end
+      @session.send(method, path, options)
     end
 
     def sign_out
-      options = relative_url_root ? {'SCRIPT_NAME' => relative_url_root} : {}
       # request is called on session, returning an ActionDispatch::Request; request.session is an ActionDispatch::Request::Session
-      post session_sign_out_path, {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}, session_options
+      parameters = {:_method => 'delete', :authenticity_token => request.session[:_csrf_token]}
+      send_request(:method => :post, :path => session_sign_out_path, :parameters => parameters, :options => session_options)
     end
 
   end
