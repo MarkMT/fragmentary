@@ -3,7 +3,7 @@ module Fragmentary
   module FragmentsHelper
 
     def cache_fragment(options, &block)
-      options.reverse_merge!(Fragmentary.config.application_root_url_column => Rails.application.routes.url_helpers.root_url.gsub(%r{https?://}, ''))
+      options.reverse_merge!(Fragmentary.config.application_root_url_column => self.root_url.gsub(%r{https?://}, ''))
       CacheBuilder.new(self).cache_fragment(options, &block)
     end
 

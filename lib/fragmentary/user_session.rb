@@ -42,7 +42,7 @@ module Fragmentary
     end
 
     def relative_url_root
-      @relative_url_root ||= Rails.application.routes.relative_url_root
+      @relative_url_root ||= Rails.application.config.relative_url_root
     end
 
     def session_options
