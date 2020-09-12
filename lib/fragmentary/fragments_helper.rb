@@ -3,6 +3,7 @@ module Fragmentary
   module FragmentsHelper
 
     def cache_fragment(options, &block)
+      Rails.logger.info "***** fragmentary root_url #{Rails.application.routes.url_helpers.root_url.inspect}"
       options.reverse_merge!(Fragmentary.config.application_root_url_column => Rails.application.routes.url_helpers.root_url.gsub(%r{https?://}, ''))
       CacheBuilder.new(self).cache_fragment(options, &block)
     end
@@ -32,6 +33,7 @@ module Fragmentary
         # If the CacheBuilder was instantiated with an existing fragment, next_fragment is its child;
         # otherwise it is the root fragment specified by the options provided.
         next_fragment = @fragment.try(:child, options) || Fragmentary::Fragment.base_class.root(options)
+        next_fragment.delay(:queue => 'persuasivethinking.com/pre/').log_root_url
         builder = CacheBuilder.new(@template, next_fragment)
         unless no_cache
           @template.cache next_fragment, :skip_digest => true do

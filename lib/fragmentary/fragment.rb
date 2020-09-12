@@ -419,6 +419,10 @@ module Fragmentary
     # Instance Methods
     # ----------------
 
+    def log_root_url
+      Rails.logger.info "***** #{self.class.name} root_url: #{Rails.application.routes.url_helpers.root_url.inspect}"
+    end
+
     def child_search_key
       self.class.child_search_key
     end
