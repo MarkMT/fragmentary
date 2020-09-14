@@ -62,6 +62,9 @@ module Fragmentary
       end
 
       class Target
+
+        attr_reader :url
+
         def initialize(url)
           @url = url
         end
@@ -83,7 +86,7 @@ module Fragmentary
       end
 
       def session
-        @session ||= InternalUserSession.new(@target, session_user)
+        @session ||= InternalUserSession.new(@target.url, session_user)
       end
 
       # Send all requests, either directly or by schedule
