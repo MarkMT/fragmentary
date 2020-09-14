@@ -15,7 +15,7 @@ module Fragmentary
       # See https://github.com/rails/rails/blob/master/actionpack/lib/action_dispatch/testing/integration.rb
       @session = app
       @user = user
-      @target = target
+      @target = URI.parse(target)
       @session.host! session_host
       sign_in if session_credentials
       instance_eval(&block) if block_given?
@@ -102,8 +102,9 @@ module Fragmentary
   class ExternalUserSession
 
     def initialize(target, user=nil)
-      @relative_url_root = target.path
-      @session = HTTP.persistent(target.to_s)
+      @target = URI.parse(target)
+      @relative_url_root = @target.path
+      @session = HTTP.persistent(target)
       @cookie = nil
       @authenticity_token = nil
       sign_in if @credentials = session_credentials(user)

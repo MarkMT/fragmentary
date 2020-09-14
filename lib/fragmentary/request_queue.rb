@@ -61,23 +61,21 @@ module Fragmentary
         end
       end
 
-      class AppInstance
+      class Target
         def initialize(url)
-          @url = URI.parse(url)
+          @url = url
         end
 
         def queue_name
-          to_s.gsub(%r{https?://}, '')
+          @url.gsub(%r{https?://}, '')
         end
-
-        delegate :host, :port, :path, :scheme, :to_s, :to => :@url
       end
 
       attr_reader :queue
 
       def initialize(queue)
         @queue = queue
-        @target_instance = AppInstance.new(queue.host_root_url)
+        @target = Target.new(queue.host_root_url)
       end
 
       def session_user
@@ -85,7 +83,7 @@ module Fragmentary
       end
 
       def session
-        @session ||= InternalUserSession.new(@target_instance, session_user)
+        @session ||= InternalUserSession.new(@target, session_user)
       end
 
       # Send all requests, either directly or by schedule
@@ -131,7 +129,7 @@ module Fragmentary
           clear_session
           Delayed::Job.transaction do
             self.class.jobs.destroy_all
-            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target_instance.queue_name
+            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target.queue_name
           end
         end
       end
