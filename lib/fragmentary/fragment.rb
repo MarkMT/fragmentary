@@ -260,28 +260,25 @@ module Fragmentary
             # by the fragment.
             class << record_type_subscription
               set_callback :after_destroy, :after, ->{subscriber.client.remove_fragments_for_record(record.id)}
+              set_callback :after_create, :after, ->{subscriber.client.try_request_for_record(record.id)}
             end
           end
 
-          record_class = record_type.constantize
-          instance_eval <<-HEREDOC
-            subscribe_to #{record_class} do
-              def create_#{record_class.model_name.param_key}_successful(record)
-                if requestable?
-                  request = Fragmentary::Request.new(request_method, request_path(record.id),
-                                                     request_parameters(record.id), request_options)
-                  queue_request(request)
-                end
-              end
-            end
-          HEREDOC
-
+          self.extend RecordClassMethods
           define_method(:record){record_type.constantize.find(record_id)}
         end
       end
 
-      def remove_fragments_for_record(record_id)
-        where(:record_id => record_id).each(&:destroy)
+      module RecordClassMethods
+        def remove_fragments_for_record(record_id)
+          where(:record_id => record_id).each(&:destroy)
+        end
+
+        def try_request_for_record(record_id)
+          if requestable?
+            queue_request(request(record_id))
+          end
+        end
       end
 
       def needs_record_id?
@@ -349,6 +346,10 @@ module Fragmentary
       # The instance method 'request_options' is defined in terms of this.
       def request_options
         {}
+      end
+
+      def request
+        raise NotImplementedError
       end
 
       # This method defines the handler for the creation of new list items. The method takes:
