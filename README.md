@@ -5,11 +5,12 @@ Fragmentary augments the fragment caching capabilities of Ruby on Rails to suppo
 * multiple versions of individual fragments for different groups of users, e.g. admin vs regular users
 * post-cache insertion of user-specific content
 * automatic refreshing of cached content when application data changes, without an external client request
+* multiple application instances running concurrently with shared application data
 
-**Note**: Fragmentary has been extracted from [Persuasive Thinking](http://persuasivethinking.com) where it is currently in active use. See [Integration Issues](https://github.com/MarkMT/fragmentary/blob/master/README.md#integration-issues) for details of issues that should be considered when using it elsewhere.
+Fragmentary has been extracted from [Persuasive Thinking](http://persuasivethinking.com) where it is currently in active use.
 
 ## Background
-In simple cases, Rails' native support for fragment caching assumes that a fragment's content is a representation of a specific application data record. The content is stored in the cache with a key value derived from the `updated_at` attribute of that record. If any attributes of the record change, the cached entry automatically expires and on the next browser request for that content the fragment is re-rendered using the current data. In the view, the `cache` helper is used to specify the record used to determine the key and define the content to be rendered within the fragment, e.g.:
+In simple cases, Rails' native support for fragment caching assumes that a fragment's content is a representation of a specific application data record. The content is stored in the cache with a key value derived from the`id` and `updated_at` attributes of that record. If any attributes of the record change, the cached entry automatically expires and on the next browser request for that content the fragment is re-rendered using the current data. In the view, the `cache` helper is used to specify the record used to determine the key and define the content to be rendered within the fragment, e.g.:
 ```
 <% cache product do %>
   <%= render product %>
@@ -577,7 +578,7 @@ def send_queued_requests
   Fragmentary::RequestQueue.all.each{|q| q.send(:delay => delay += 10.seconds)}
 end
 ```
-The `send` method takes two optional named arguments, `delay` and `between`. If neither are present, all requests held in the queue are sent immediately. If either are present, sending of requests is off-loaded to an asynchronous process using the [Delayed::Job gem](https://github.com/collectiveidea/delayed_job) and scheduled according to the parameters provided: `delay` represents the delay before the queue begins sending requests and `between` represents the interval between individual requests in the queue being sent. In the example above, we choose to delay the sending of requests from each queue by 10 seconds each. You may customize as appropriate.
+The `send` method takes two optional named arguments, `delay` and `between`. If neither are present, all requests held in the queue are sent immediately. If either are present, sending of requests is off-loaded to an asynchronous process using the [Delayed::Job gem](https://github.com/collectiveidea/delayed_job) (i.e. we are not currently using Active Job) and scheduled according to the parameters provided: `delay` represents the delay before the queue begins sending requests and `between` represents the interval between individual requests in the queue being sent. In the example above, we choose to delay the sending of requests from each queue by 10 seconds each. You may customize as appropriate.
 
 #### Queuing Requests Explicitly
 
@@ -758,13 +759,89 @@ Note that if the partial page content being generated contains several nested ch
 
 It is possible to define a fragment without actually storing its content in the cache store. This can be useful, for example if you wish to cache several sibling children within a page but don't need to store the entire root fragment that contains them. Simply include the option `:no_cache => true` in the hash passed to `cache_fragment` or `cache_child`.
 
-## Integration Issues
+### Support for Multiple Application Instances
 
-There are some aspects of this pre-release version of Fragmentary that reflect the application context in which it was originally developed and may need adjustment before deployment elsewhere. Note in particular the following:
-1. Fragmentary was created in the context of a Rails 4.x application (for perfectly sound reasons! :)). There should be only minor adjustment required for use within a Rails 5.x application, but two specific issues we are aware of are the following:
-  - Rails 5.x changes the API for `ActionDispatch::Integration::Session` and now requires that HTTP request parameters be passed as a named parameter `:params`, rather than an unnamed hash in Rails 4.x. This affects the method `to_proc` in class `Fragmentary::Request` and the methods `sign_in` and `sign_out` in class `Fragmentary::UserSession`.
-  - In 'lib/fragmentary/fragment.rb', we set `cache_timestamp_format = :usec` to overcome a timestamp resolution problem when using caching with Postgres under Rails 4.x. We believe that this problem has been solved in Rails 5.x, so this setting will not be necessary. See https://github.com/rails/rails/issues/21815.
-1. Fragmentary uses the [Delayed::Job gem](https://github.com/collectiveidea/delayed_job) to execute background tasks asynchronously. Other alternatives exist within the Rails ecosystem, and in Rails 5.x it will probably make sense to use [Active Job](https://guides.rubyonrails.org/active_job_basics.html) as an abstraction layer.
+In many practical deployment scenarios it is desirable to maintain a live pre-release version of the application online separate from the public-facing production website. This allows new software releases to be staged for either internal or beta testing prior to final deployment to the production environment. For example, if the public-facing application is accessed at a root URL of http://myapp.com/, a separate pre-release version might be deployed say to http://prerelease.myapp.com/ or http://myapp.com/prerelease/.
+
+In the specific scenario in which Fragmentary was developed, it was important for the pre-release version of the application to share the same application database as the production site, i.e. both production and pre-release versions render exactly the same data, and any changes to application data initiated by a user of one version of the application will be reflected in the content seen by a user of the other version as well. For caching, this leads to some additional challenges which we discuss below.
+
+#### Storing Multiple Versions of Content in the Cache
+
+There is an important difference between the content rendered by each instance of an application: any HTML links to other pages on the site must be to URLs representing the particular version being rendered. For example, on a 'products' index page, a link to an individual product page on the production website might look like http://myapp.com/products/123, while the same link on the index page of the pre-release version might be http://myapp.com/prerelease/products/123.
+
+In general, as long as links contained in the view are created using Rails' standard path or url helpers, e.g. `product_path(@product)`  etc, they will automatically be based on the root URL of the application instance (production or pre-release) in which they are generated. However, in the context of caching, the fact that differences exist in the content generated by different application instances implies that for each fragment defined in the view by calling `cache_fragment` or `cache_child`, different versions of fragment content need to be stored in the cache. Also, each of these distinct versions needs to be associated with a unique record in the `fragments` database table identifying which application instance generated that content.
+
+In Fragmentary we can accomplish this simply by adding a column to the `fragments` table to store the root URL of the particular application instance that created the fragment content.
+
+```
+class AddAppUrlToFragment < ActiveRecord::Migration
+  def change
+    change_table :fragments do |t|
+      t.string :application_root_url
+    end
+  end
+end
+```
+
+The column name `application_root_url` shown above is the default assumed by Fragmentary. You can use a different column name if you wish, as long as you tell Fragmentary in initializers/fragmentary.rb, e.g.:
+
+```
+Fragmentary.setup do |config|
+  ...
+  config.application_root_url_column = 'app_root'
+end
+
+```
+
+Once this column has been added to the `fragments` table, any fragment records subsequently created by calls to `cache_fragment` or `cache_child` will have the column populated automatically based on the particular application instance in which the code is executed, and the content stored in the cache for each fragment record will be that generated by the corresponding instance. As long as any links rendered within the content are generated using Rails' path or url helpers, the cached content will be rendered correctly both when initially created and when retrieved subsequently.
+
+Note that it is possible to store cached content for each of the different application instances in different places. Simply set `config.cache_store` in config/environments/production.rb (or alternative environment file) as required.
+
+#### Automatically Refreshing Multiple Versions of Cached Content
+
+The fact that two versions of content exist in the cache for each fragment means that whenever a change in application data occurs that triggers the generation of an internal application request to refresh a piece of cached content (i.e. for any fragment that has a `request_path` method defined), _both_ (in general all) versions need to be refreshed. So for example, a change to application data caused by a user action on the production website needs to trigger internal requests to _both_ the production _and_ the pre-release instances in order to refresh their respective content. The converse is true for changes initiated from the pre-release website.
+
+(Note: for better or worse, we've stuck with the term 'internal request' to mean any request delivered to the application programmatically in order to refresh cached content. This includes requests created by one application instance that are intended to be processed by another instance.)
+
+Our approach to sending requests between application instances relies on requests being processed asynchronously (i.e. by passing a `delay` value to RequestQueue#send in the controller method `send_queued_requests` discussed earlier). The reason is that asynchronous tasks used to process internal requests can be directed to specific task queues associated with the application instance they are intended to be processed by. Each application instance has an associated asynchronous task process. By configuring that process to run tasks from just the queue(s) designated for it, we ensure that any application instance can direct requests to any other.
+
+As noted earlier, our current implementation relies on [Delayed::Job](https://github.com/collectiveidea/delayed_job) for creating and processing asynchronous tasks. Queued tasks are stored in a database table, so as long as each application and [Delayed::Job](https://github.com/collectiveidea/delayed_job) instance have access to the same database, this approach will be successful.
+
+To configure Fragmentary to automatically refresh cached content for multiple instances, first set `remote_urls` in `Fragmentary.config`. This is an array of root URLs for all _other_ instances of the application that requests should be sent to. For example, in order to allow requests to be sent from the production instance to the pre-release instance, in initializers/fragmentary.rb in the production code we would add the following configuration:
+
+```
+Fragmentary.setup do |config|
+  ...
+  config.remote_urls << 'http://myapp.com/prerelease/'
+end
+```
+
+Our current approach to application deployment is to maintain different branches in our source repository for each application instance. This allows us to keep custom configurations like `config.remote_urls` above for each instance on their own branches. So in contrast to the case above, to allow requests to be sent from the pre-release instance to the production instance, in initializers/fragmentary.rb on the pre-release branch the `remote_urls` array would be set to `['http://myapp.com/']` .
+
+As an alternative, it may be possible to create a separate environment for the pre-release deployment in your config/environments directory and thus maintain the configuration for all application instances in a single repository branch. We have not investigated this approach.
+
+By specifying `remote_urls` as described above, for each internal application request Fragmentary will automatically create tasks to process the request not only on the application instance where it was created but also on all other instances corresponding to the elements in `remote_urls`. Fragmentary sends these tasks to [Delayed::Job](https://github.com/collectiveidea/delayed_job) queues that have names formed from the domain name and path of both the root URL of the current instance and the values in `remote_urls`. So in the example, a request to '/products/123', created say by editing a product name on the production website, would be sent to [Delayed::Job](https://github.com/collectiveidea/delayed_job) queues with names 'myapp.com' and 'myapp.com/prerelease/'.
+
+The final step needed to allow internal requests to be processed by the instance they are intended for is to configure the [Delayed::Job](https://github.com/collectiveidea/delayed_job) process associated with each instance to process tasks from the correct queue.
+
+In our case we use Capistrano 2 for deployment and use `delayed_job_args` in config/deploy.rb to configure queue names (see documentation [here](https://github.com/collectiveidea/delayed_job/blob/master/lib/delayed/recipes.rb)):
+
+```
+queue_prefix = "myapp.com/prerelease/"
+set :delayed_job_args, "--queue=#{queue_prefix},#{queue_prefix}_overnight"
+after "deploy:stop",    "delayed_job:stop"
+after "deploy:start",   "delayed_job:start"
+after "deploy:restart", "delayed_job:restart"
+```
+
+Again, this configuration will be different for each instance and so in our case each one will be stored in different source repository branches.
+
+Note that if you configure [Delayed::Job](https://github.com/collectiveidea/delayed_job) to work only from specific queues, you'll need to make sure that _any_ asynchronous tasks created by your application are submitted to one of those queues.
+
+## Dependencies
+
+  - The current implementation of Fragmentary has been tested using Rails 5. It does not work with earlier versions of Rails due to a change in the API for Rails `ActionDispatch::Integration::Session` class. We do have a 'Rails.4.2' branch that uses the older API in the github repository. However this branch is no longer maintained.
+  - As noted, Fragmentary uses the [Delayed::Job](https://github.com/collectiveidea/delayed_job) gem to execute background tasks asynchronously.
 
 ## Contributing
 

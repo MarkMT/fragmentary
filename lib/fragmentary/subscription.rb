@@ -44,7 +44,7 @@ module Fragmentary
     end
 
     include ActiveSupport::Callbacks
-    define_callbacks :after_destroy
+    define_callbacks :after_create, :after_destroy
 
     attr_reader :subscriber
     attr_accessor :record
@@ -55,7 +55,10 @@ module Fragmentary
     end
 
     def after_create(record)
-      call_method(:"create_#{record.class.model_name.param_key}_successful", record)
+      run_callbacks :after_create do
+        @record = record
+        call_method(:"create_#{record.class.model_name.param_key}_successful", record)
+      end
     end
 
     def after_update(record)

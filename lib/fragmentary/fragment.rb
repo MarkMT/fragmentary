@@ -24,8 +24,6 @@ module Fragmentary
         # redundant duplicate request.
         after_commit :touch_parent, :on => [:update, :destroy]
 
-        attr_accessible :parent_id, :root_id, :record_id, :user_id, :user_type, :key
-
         attr_accessor :indexed_children
 
         # Set cache timestamp format to :usec instead of :nsec because the latter is greater precision than Postgres supports,
@@ -73,8 +71,14 @@ module Fragmentary
         # Collect the attributes to be used when searching for an existing fragment. Fragments are unique by these values.
         search_attributes = {}
 
-        parent_id = options.delete(:parent_id)
-        search_attributes.merge!(:parent_id => parent_id) if parent_id
+        if (parent_id = options.delete(:parent_id))
+          search_attributes.merge!(:parent_id => parent_id)
+        else
+          application_root_url_column = Fragmentary.config.application_root_url_column
+          if (application_root_url = options.delete(application_root_url_column)) && column_names.include?(application_root_url_column.to_s)
+            search_attributes.merge!(application_root_url_column => application_root_url)
+          end
+        end
 
         [:record_id, :user_id, :user_type, :key].each do |attribute_name|
           if klass.needs?(attribute_name)
@@ -117,20 +121,53 @@ module Fragmentary
         self
       end
 
+      # There is one queue per user_type per application instance (the current app and any external instances). The queues
+      # for all fragments are held in common by the Fragment base class here in @@request_queues but are also indexed on a
+      # subclass basis by an individual subclass's user_types (see the inherited hook below). As well as being accessible
+      # here as Fragment.request_queues, the queues are also available without indexation as RequestQueue.all.
       def request_queues
-        @@request_queues ||= Hash.new do |hash, user_type|
-          hash[user_type] = RequestQueue.new(user_type)
-        end
-        if self == base_class
-          @@request_queues
-        else
-          return nil unless (requestable? or new.requestable?)
-          user_types.each_with_object({}){|user_type, queues| queues[user_type] = @@request_queues[user_type]}
+        @@request_queues ||= Hash.new do |hsh, host_url|
+          # As well as acting as a hash key to index the set of request queues for a given target application instance
+          # (for which its uniqueness is the only requirement), host_url is also passed to the RequestQueue constructor,
+          # from which it is used:
+          #   (i) by the RequestQueue::Sender to derive the name of the delayed_job queue that will be used to process the
+          #       queued requests if the sender is invoked in asynchronous mode - see RequestQueue::Sender#schedulerequests.
+          #   (ii) by the Fragmentary::InternalUserSession instantiated by the Sender to configure the session_host.
+          hsh[host_url] = Hash.new do |hsh2, user_type|
+            hsh2[user_type] = RequestQueue.new(user_type, host_url)
+          end
         end
       end
 
+      # Subclass-specific request_queues
+      def inherited(subclass)
+        subclass.instance_eval do
+
+          def request_queues
+            super  # ensure that @@request_queues has been defined
+            @request_queues ||= begin
+              app_root_url = Rails.application.routes.url_helpers.root_url
+              remote_urls = Fragmentary.config.remote_urls
+              user_types.each_with_object( Hash.new {|hsh0, url| hsh0[url] = {}} ) do |user_type, hsh|
+                # Internal request queues
+                hsh[app_root_url][user_type] = @@request_queues[app_root_url][user_type]
+                # External request queues
+                if remote_urls.any?
+                  unless Rails.application.routes.default_url_options[:host]
+                    raise "Can't create external request queues without setting Rails.application.routes.default_url_options[:host]"
+                  end
+                  remote_urls.each {|remote_url| hsh[remote_url][user_type] = @@request_queues[remote_url][user_type]}
+                end
+              end
+            end
+          end
+
+        end
+        super
+      end
+
       def remove_queued_request(user:, request_path:)
-        request_queues[user_type(user)].remove_path(request_path)
+        request_queues.each{|key, hsh| hsh[user_type(user)].remove_path(request_path)}
       end
 
       def subscriber
@@ -158,6 +195,11 @@ module Fragmentary
       # signed in. When the fragment is instantiated using FragmentsHelper methods 'cache_fragment' or 'CacheBuilder.cache_child',
       # a :user option is added to the options hash automatically from the value of 'current_user'. The user_type is extracted
       # from this option in Fragment.attributes.
+      #
+      # For each class that declares 'needs_user_type', a set of user_types is defined that determines the set of request_queues
+      # that will be used to send requests to the application when a fragment is touched. By default these user_types are defined
+      # globally using 'Fragmentary.setup' but they can alternatively be set on a class-specific basis by passing a :session_users
+      # option to 'needs_user_type'. See 'Fragmentary.parse_session_users' for details.
       def needs_user_type(options = {})
         self.extend NeedsUserType
         instance_eval do
@@ -218,28 +260,25 @@ module Fragmentary
             # by the fragment.
             class << record_type_subscription
               set_callback :after_destroy, :after, ->{subscriber.client.remove_fragments_for_record(record.id)}
+              set_callback :after_create, :after, ->{subscriber.client.try_request_for_record(record.id)}
             end
           end
 
-          record_class = record_type.constantize
-          instance_eval <<-HEREDOC
-            subscribe_to #{record_class} do
-              def create_#{record_class.model_name.param_key}_successful(record)
-                if requestable?
-                  request = Fragmentary::Request.new(request_method, request_path(record.id),
-                                                     request_parameters(record.id), request_options)
-                  queue_request(request)
-                end
-              end
-            end
-          HEREDOC
-
+          self.extend RecordClassMethods
           define_method(:record){record_type.constantize.find(record_id)}
         end
       end
 
-      def remove_fragments_for_record(record_id)
-        where(:record_id => record_id).each(&:destroy)
+      module RecordClassMethods
+        def remove_fragments_for_record(record_id)
+          where(:record_id => record_id).each(&:destroy)
+        end
+
+        def try_request_for_record(record_id)
+          if requestable?
+            queue_request(request(record_id))
+          end
+        end
       end
 
       def needs_record_id?
@@ -288,9 +327,7 @@ module Fragmentary
       end
 
       def queue_request(request=nil)
-        if request
-          request_queues.each{|key, queue| queue << request}
-        end
+        request_queues.each{|key, hsh| hsh.each{|key2, queue| queue << request}} if request
       end
 
       def requestable?
@@ -308,7 +345,11 @@ module Fragmentary
 
       # The instance method 'request_options' is defined in terms of this.
       def request_options
-        nil
+        {}
+      end
+
+      def request
+        raise NotImplementedError
       end
 
       # This method defines the handler for the creation of new list items. The method takes:
@@ -453,7 +494,7 @@ module Fragmentary
     end
 
     def touch(*args, no_request: false)
-      request_queues.each{|key, queue| queue << request} if request && !no_request
+      request_queues.each{|key, hsh| hsh.each{|key2, queue| queue << request}} if request && !no_request
       super(*args)
     end
 

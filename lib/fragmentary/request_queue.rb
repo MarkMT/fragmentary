@@ -1,5 +1,3 @@
-require 'fragmentary/user_session'
-
 module Fragmentary
 
   class RequestQueue
@@ -8,12 +6,15 @@ module Fragmentary
       @@all ||= []
     end
 
-    attr_reader :requests, :user_type, :sender
+    attr_reader :requests, :user_type, :host_root_url
 
-    def initialize(user_type)
+    def initialize(user_type, host_root_url)
       @user_type = user_type
+      # host_root_url represents where the queued *requests* are to be processed. For internal sessions it also represents where
+      # the *queue* will be processed by delayed_job. For external requests, the queue will be processed by the host creating the
+      # queue and the requests will be explicitly sent to the host_root_url.
+      @host_root_url = host_root_url
       @requests = []
-      @sender = Sender.new(self)
       self.class.all << self
     end
 
@@ -40,6 +41,10 @@ module Fragmentary
       requests.delete_if{|r| r.path == path}
     end
 
+    def sender
+      @sender ||= Sender.new(self)
+    end
+
     def send(**args)
       sender.start(args)
     end
@@ -49,9 +54,23 @@ module Fragmentary
     end
 
     class Sender
+
       class << self
         def jobs
           ::Delayed::Job.where("(handler LIKE ?) OR (handler LIKE ?)", "--- !ruby/object:#{name} %", "--- !ruby/object:#{name}\n%")
+        end
+      end
+
+      class Target
+
+        attr_reader :url
+
+        def initialize(url)
+          @url = url
+        end
+
+        def queue_name
+          @url.gsub(%r{https?://}, '')
         end
       end
 
@@ -59,6 +78,15 @@ module Fragmentary
 
       def initialize(queue)
         @queue = queue
+        @target = Target.new(queue.host_root_url)
+      end
+
+      def session_user
+        @session_user ||= Fragmentary::SessionUser.fetch(queue.user_type)
+      end
+
+      def session
+        @session ||= InternalUserSession.new(@target.url, session_user)
       end
 
       # Send all requests, either directly or by schedule
@@ -80,21 +108,18 @@ module Fragmentary
         @between ? send_next_request : send_all_requests
       end
 
+      def send_next_request
+        if queue.size > 0
+          request = queue.next_request
+          session.send_request(:method => request.method, :path => request.path, :parameters => request.parameters, :options => request.options)
+        end
+      end
+
       def success
         schedule_requests(@between) if queue.size > 0
       end
 
       private
-
-      def next_request
-        queue.next_request.to_proc
-      end
-
-      def send_next_request
-        if queue.size > 0
-          session.instance_exec(&(next_request))
-        end
-      end
 
       def send_all_requests
         while queue.size > 0
@@ -107,18 +132,9 @@ module Fragmentary
           clear_session
           Delayed::Job.transaction do
             self.class.jobs.destroy_all
-            Delayed::Job.enqueue self, :run_at => delay.from_now
+            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target.queue_name
           end
         end
-      end
-
-      def session
-        @session ||= new_session
-      end
-
-      def new_session
-        session_user = Fragmentary::SessionUser.fetch(queue.user_type)
-        UserSession.new(session_user)
       end
 
       def clear_session
@@ -128,4 +144,5 @@ module Fragmentary
     end
 
   end
+
 end
