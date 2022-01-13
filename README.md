@@ -807,7 +807,7 @@ Our approach to sending requests between application instances relies on request
 
 As noted earlier, our current implementation relies on [Delayed::Job](https://github.com/collectiveidea/delayed_job) for creating and processing asynchronous tasks. Queued tasks are stored in a database table, so as long as each application and [Delayed::Job](https://github.com/collectiveidea/delayed_job) instance have access to the same database, this approach will be successful.
 
-To configure Fragmentary to automatically refresh cached content for multiple instances, first set `remote_urls` in `Fragmentary.config`. This is an array of root URLs for all _other_ instances of the application that requests should be sent to. For example in the production code, in order to allow requests to be sent to the pre-release instance we would add the following configuration:
+To configure Fragmentary to automatically refresh cached content for multiple instances, first set `remote_urls` in `Fragmentary.config`. This is an array of root URLs for all _other_ instances of the application that requests should be sent to. For example, in order to allow requests to be sent from the production instance to the pre-release instance, in initializers/fragmentary.rb in the production code we would add the following configuration:
 
 ```
 Fragmentary.setup do |config|
@@ -816,7 +816,7 @@ Fragmentary.setup do |config|
 end
 ```
 
-Our current approach to application deployment is to maintain different branches in our source repository for each application instance. This allows us to keep custom configurations like `config.remote_urls` above for each instance on their own branches. So in contrast to the case above, in initializers/fragmentary.rb on the pre-release branch the `remote_urls` array would be set to `['http://myapp.com/']` to allow requests to be sent from the pre-release instance to the production instance.
+Our current approach to application deployment is to maintain different branches in our source repository for each application instance. This allows us to keep custom configurations like `config.remote_urls` above for each instance on their own branches. So in contrast to the case above, to allow requests to be sent from the pre-release instance to the production instance, in initializers/fragmentary.rb on the pre-release branch the `remote_urls` array would be set to `['http://myapp.com/']` .
 
 As an alternative, it may be possible to create a separate environment for the pre-release deployment in your config/environments directory and thus maintain the configuration for all application instances in a single repository branch. We have not investigated this approach.
 
