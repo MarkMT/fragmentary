@@ -1,3 +1,8 @@
+### 0.3.0
+- Updates gem to support Rails 5.x (Rails 4.x and earlier are no longer supported due to Rails API changes).
+- Adds support for multiple application instances, allowing pre-release application code to be staged for testing.
+- Fixes a bug in Fragment.set_record_type affecting some application data handlers for fragment classes that are subclassed from another.
+
 ### 0.2.2
 - Removes validation of the fragment's root_id (only relevant to child fragments); ignore v0.2.1
 
