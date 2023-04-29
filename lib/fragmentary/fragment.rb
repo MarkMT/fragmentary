@@ -520,7 +520,6 @@ module Fragmentary
     # Touch this fragment and all descendants that have entries in the cache. Destroy any that
     # don't have cache entries.
     def touch_or_destroy
-      puts "  touch_or_destroy #{self.class.name} #{id}"
       if cache_exist?
         children.each(&:touch_or_destroy)
         # if there are children, this will be touched automatically once they are.
