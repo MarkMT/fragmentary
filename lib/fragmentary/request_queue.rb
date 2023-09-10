@@ -90,9 +90,9 @@ module Fragmentary
       end
 
       # Send all requests, either directly or by schedule
-      def start(delay: nil, between: nil)
+      def start(delay: nil, between: nil, queue_suffix: '', priority: 0)
         Rails.logger.info "\n***** Processing request queue for user_type '#{queue.user_type}'\n"
-        @delay = delay; @between = between
+        @delay = delay; @between = between; @queue_suffix = queue_suffix; @priority = priority
         if @delay or @between
           schedule_requests(@delay)
           # sending requests by schedule makes a copy of the sender and queue objects for
@@ -132,7 +132,7 @@ module Fragmentary
           clear_session
           Delayed::Job.transaction do
             self.class.jobs.destroy_all
-            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target.queue_name
+            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target.queue_name + @queue_suffix, :priority => @priority
           end
         end
       end
