@@ -494,12 +494,14 @@ module Fragmentary
     end
 
     def touch(*args, no_request: false)
+      @no_request = no_request  # stored for use in #touch_parent via the after_commit callback
       request_queues.each{|key, hsh| hsh.each{|key2, queue| queue << request}} if request && !no_request
       super(*args)
     end
 
     def destroy(options = {})
       options.delete(:delete_matches) ? delete_matched_cache : delete_cache
+      @no_request = options.delete(:no_request)  # stored for use in #touch_parent via the after_commit callback
       super()
     end
 
@@ -526,7 +528,7 @@ module Fragmentary
         # if there are children, this will be touched automatically once they are.
         touch(:no_request => true) unless children.any?
       else
-        destroy  # will also destroy all children because of :dependent => :destroy
+        destroy(:no_request => true)  # will also destroy all children because of :dependent => :destroy
       end
     end
 
@@ -570,7 +572,8 @@ module Fragmentary
 
     private
     def touch_parent
-      parent.try :touch unless previous_changes["memo"]
+      parent.try(:touch, {:no_request => @no_request}) unless previous_changes["memo"]
+      @no_request = false
     end
 
     module NeedsRecordId
