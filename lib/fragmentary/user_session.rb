@@ -22,7 +22,7 @@ module Fragmentary
     end
 
     def session_host
-      @session_host ||= @target.host + ((port=@target.port) ? ":#{port}" : "")
+      @session_host ||= @target.host + (port=@target.port ? ":#{port}" : "")
     end
 
     def session_sign_in_path
