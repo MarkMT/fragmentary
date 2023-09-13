@@ -3,7 +3,7 @@ module Fragmentary
   module FragmentsHelper
 
     def cache_fragment(options, &block)
-      options.reverse_merge!(Fragmentary.config.application_root_url_column => self.root_url.gsub(%r{https?://}, ''))
+      options.reverse_merge!(Fragmentary.config.application_root_url_column => application_root_url)
       CacheBuilder.new(self).cache_fragment(options, &block)
     end
 
@@ -11,8 +11,12 @@ module Fragmentary
       # the template option is deprecated but avoids breaking prior usage
       template = options.delete(:template) || self
       options.reverse_merge!(:user => Template.new(template).current_user)
-      options.reverse_merge!(Fragmentary.config.application_root_url_column => self.root_url.gsub(%r{https?://}, ''))
+      options.reverse_merge!(Fragmentary.config.application_root_url_column => application_root_url)
       CacheBuilder.new(template, Fragmentary::Fragment.base_class.existing(options))
+    end
+
+    def application_root_url
+      Rails.application.routes.url_helpers.root_url.gsub(%r{https?://}, '')
     end
 
     class CacheBuilder
