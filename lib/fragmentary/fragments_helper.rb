@@ -40,7 +40,16 @@ module Fragmentary
         builder = CacheBuilder.new(@template, next_fragment)
         unless no_cache
           @template.cache next_fragment, :skip_digest => true do
-            yield(builder)
+            if Fragmentary.config.insert_timestamps
+              @template.safe_concat("<!-- #{next_fragment.type} #{next_fragment.id} cached by Fragmentary version #{VERSION} at #{Time.now.utc} -->")
+              if deployed_at && release_name
+                @template.safe_concat("<!-- Cached using application release #{release_name} deployed at #{deployed_at} -->")
+              end
+              yield(builder)
+              @template.safe_concat("<!-- #{next_fragment.type} #{next_fragment.id} ends -->")
+            else
+              yield(builder)
+            end
           end
         else
           yield(builder)
@@ -56,6 +65,13 @@ module Fragmentary
         @fragment.send(method, *args)
       end
 
+      def deployed_at
+        @deployed_at ||= Fragmentary.config.deployed_at
+      end
+
+      def release_name
+        @release_name ||= Fragmentary.config.release_name
+      end
     end
 
   end

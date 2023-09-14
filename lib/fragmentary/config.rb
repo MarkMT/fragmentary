@@ -3,13 +3,17 @@ module Fragmentary
   class Config
     include Singleton
     attr_accessor :current_user_method, :get_sign_in_path, :post_sign_in_path, :sign_out_path,
-                  :users, :default_user_type_mapping, :session_users, :application_root_url_column, :remote_urls
+                  :users, :default_user_type_mapping, :session_users, :application_root_url_column,
+                  :remote_urls, :insert_timestamps, :deployed_at, :release_name
 
     def initialize
       # default
       @current_user_method = :current_user
       @application_root_url_column = :application_root_url
       @remote_urls = []
+      @insert_timestamps = false
+      @deployed_at = nil
+      @relesase_name = nil
     end
 
     def session_users=(session_users)
