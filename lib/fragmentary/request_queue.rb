@@ -6,6 +6,18 @@ module Fragmentary
       @@all ||= []
     end
 
+    def self.send_all(between: nil)
+      unless between
+        all.each{|q| q.start}
+      else
+        unless between.is_a? ActiveSupport::Duration
+          raise TypeError, "Fragmentary::RequestQueue.send_all requires the keyword argument :between to be of class ActiveSupport::Duration. The value provided is of class #{between.class.name}."
+        end
+        delay = 0.seconds
+        all.each{|q| q.start(:delay => delay += between)}
+      end
+    end
+
     attr_reader :requests, :user_type, :host_root_url
 
     def initialize(user_type, host_root_url)
