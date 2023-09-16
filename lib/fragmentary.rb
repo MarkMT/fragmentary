@@ -19,4 +19,12 @@ module Fragmentary
     @config
   end
   class << self; alias setup config; end
+
+  def self.application
+    Rails.application
+  end
+
+  def self.application_root_url
+    application.routes.url_helpers.root_url
+  end
 end

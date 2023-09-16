@@ -146,7 +146,7 @@ module Fragmentary
           def request_queues
             super  # ensure that @@request_queues has been defined
             @request_queues ||= begin
-              app_root_url = Rails.application.routes.url_helpers.root_url
+              app_root_url = Fragmentary.application_root_url
               remote_urls = Fragmentary.config.remote_urls
               user_types.each_with_object( Hash.new {|hsh0, url| hsh0[url] = {}} ) do |user_type, hsh|
                 # Internal request queues
@@ -499,6 +499,7 @@ module Fragmentary
       super(*args)
     end
 
+    # delete the associated cache content before destroying the fragment
     def destroy(options = {})
       options.delete(:delete_matches) ? delete_matched_cache : delete_cache
       @no_request = options.delete(:no_request)  # stored for use in #touch_parent via the after_commit callback
@@ -510,9 +511,17 @@ module Fragmentary
     end
 
     def delete_cache
-      cache_store.delete(ActiveSupport::Cache.expand_cache_key(self, 'views'))
+      cache_store.delete(fragment_key)
     end
 
+    # Recursively delete the cache entry for this fragment and all of its children
+    # Does NOT destroy the fragment or its children
+    def delete_cache_tree
+      children.each(&:delete_cache_tree)
+      delete_cache if cache_exist?
+    end
+
+    # Recursively touch the fragment and all of its children
     def touch_tree(no_request: false)
       children.each{|child| child.touch_tree(:no_request => no_request)}
       # If there are children, we'll have already touched this fragment in the process of touching them.
@@ -533,7 +542,20 @@ module Fragmentary
 
     def cache_exist?
       # expand_cache_key calls cache_key and prepends "views/"
-      cache_store.exist?(ActiveSupport::Cache.expand_cache_key(self, 'views'))
+      cache_store.exist?(fragment_key)
+    end
+
+
+    # Typically used along with #cache_exist? when testing from the console.
+    # Note that both methods will only return correct results for fragments associated with the application_root_url
+    # (either root or children) corresponding to the particular console session in use. i.e. you can't see into the
+    # production cache from a prerelease console session and vice versa.
+    def content
+      cache_store.read(fragment_key)
+    end
+
+    def fragment_key
+      ActiveSupport::Cache.expand_cache_key(self, 'views')
     end
 
     # Request-related methods...
