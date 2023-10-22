@@ -13,7 +13,7 @@ module Fragmentary
       @remote_urls = []
       @insert_timestamps = false
       @deployed_at = nil
-      @relesase_name = nil
+      @release_name = nil
     end
 
     def session_users=(session_users)
