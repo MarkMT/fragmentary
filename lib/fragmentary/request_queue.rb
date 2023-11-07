@@ -1,3 +1,5 @@
+require 'fragmentary/request_queue/request_sender_job'
+
 module Fragmentary
 
   class RequestQueue
@@ -84,9 +86,10 @@ module Fragmentary
         def queue_name
           @url.gsub(%r{https?://}, '')
         end
+
       end
 
-      attr_reader :queue
+      attr_reader :queue, :target, :delay, :between, :queue_suffix, :priority
 
       def initialize(queue)
         @queue = queue
@@ -127,10 +130,6 @@ module Fragmentary
         end
       end
 
-      def success
-        schedule_requests(@between) if queue.size > 0
-      end
-
       private
 
       def send_all_requests
@@ -142,10 +141,8 @@ module Fragmentary
       def schedule_requests(delay=0.seconds)
         if queue.size > 0
           clear_session
-          Delayed::Job.transaction do
-            self.class.jobs.destroy_all
-            Delayed::Job.enqueue self, :run_at => delay.from_now, :queue => @target.queue_name + @queue_suffix, :priority => @priority
-          end
+          job = RequestSenderJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
+          job.enqueue(:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority)
         end
       end
 

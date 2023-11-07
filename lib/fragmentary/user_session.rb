@@ -83,8 +83,10 @@ module Fragmentary
       options.merge!({:params => parameters})
       options.merge!(session_options)
       if options.try(:[], :xhr)
+        puts "      * Sending xhr request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
         Rails.logger.info "      * Sending xhr request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
       else
+        puts "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
         Rails.logger.info "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
       end
       @session.send(method, path, options)

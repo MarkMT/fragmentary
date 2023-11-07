@@ -1,12 +1,9 @@
 module Fragmentary
 
-  class Dispatcher
-    def initialize(tasks)
-      @tasks = tasks
-    end
+  class Dispatcher < ActiveJob::Base
 
-    def perform
-      @tasks.each do |task|
+    def perform(tasks)
+      tasks.each do |task|
         Rails.logger.info "***** Dispatching task for handler class #{task.class.name}"
         task.call
       end
@@ -14,6 +11,7 @@ module Fragmentary
         queue.start
       end
     end
+
   end
 
 end
