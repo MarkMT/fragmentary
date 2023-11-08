@@ -1,6 +1,8 @@
+require 'fragmentary/serializers/handler_serializer'
+
 module Fragmentary
 
-  class Dispatcher < ActiveJob::Base
+  class DispatchHandlersJob < ActiveJob::Base
 
     def perform(tasks)
       tasks.each do |task|

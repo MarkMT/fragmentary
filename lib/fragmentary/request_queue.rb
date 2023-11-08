@@ -1,5 +1,3 @@
-require 'fragmentary/request_queue/request_sender_job'
-
 module Fragmentary
 
   class RequestQueue
@@ -141,7 +139,7 @@ module Fragmentary
       def schedule_requests(delay=0.seconds)
         if queue.size > 0
           clear_session
-          job = RequestSenderJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
+          job = SendRequestsJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
           job.enqueue(:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority)
         end
       end

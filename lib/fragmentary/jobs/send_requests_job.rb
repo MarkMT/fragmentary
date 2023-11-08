@@ -1,8 +1,8 @@
-require 'fragmentary/request_queue/request_queue_serializer'
+require 'fragmentary/serializers/request_queue_serializer'
 
 module Fragmentary
 
-  class RequestSenderJob < ActiveJob::Base
+  class SendRequestsJob < ActiveJob::Base
 
     after_perform :schedule_next
 

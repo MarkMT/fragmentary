@@ -11,6 +11,8 @@ require 'fragmentary/session_user'
 require 'fragmentary/widget_parser'
 require 'fragmentary/widget'
 require 'fragmentary/publisher'
+require 'fragmentary/jobs/send_requests_job'
+require 'fragmentary/jobs/dispatch_handlers_job'
 
 module Fragmentary
   def self.config
