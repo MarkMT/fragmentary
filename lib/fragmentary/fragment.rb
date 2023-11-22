@@ -554,8 +554,11 @@ module Fragmentary
       cache_store.read(fragment_key)
     end
 
+    # This emulates the result of passing the fragment object to AbstractController::Caching::Fragments#combined_fragment_cache_key
+    # when the cache helper method invokes controller.read_fragment from the view. The result can be passed to ActiveSupport::Cache methods
+    # #read, #write, #fetch, #delete, and #exist?
     def fragment_key
-      ActiveSupport::Cache.expand_cache_key(self, 'views')
+      ['views', self]
     end
 
     # Request-related methods...
