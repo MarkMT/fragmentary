@@ -10,12 +10,16 @@ Fragmentary augments the fragment caching capabilities of Ruby on Rails to suppo
 Fragmentary has been extracted from [Persuasive Thinking](http://persuasivethinking.com) where it is currently in active use.
 
 ## Background
-In simple cases, Rails' native support for fragment caching assumes that a fragment's content is a representation of a specific application data record. The content is stored in the cache with a key value derived from the`id` and `updated_at` attributes of that record. If any attributes of the record change, the cached entry automatically expires and on the next browser request for that content the fragment is re-rendered using the current data. In the view, the `cache` helper is used to specify the record used to determine the key and define the content to be rendered within the fragment, e.g.:
+In simple cases, Rails' native support for fragment caching assumes that a fragment's content is a representation of a specific application data record. In the view, the `cache` helper is used to specify the record and to define the content to be rendered within the fragment, e.g.:
 ```
 <% cache product do %>
   <%= render product %>
 <% end %>
 ```
+The content is stored in the cache using a _key_ value derived from the record's `id` attribute. The key identifies where the cached content is stored. In addition, a _version_ value derived from the record's `updated_at` attribute is stored along with the content [^1]. If any attributes of the record change, the `updated_at` attribute also changes; the next time a browser requests the content, a mismatch will exist between the calculated and stored values of the version, causing the cache to expire and the fragment to be re-rendered using the current data.
+
+[^1]: Prior to Rails 5.2, the value of `updated_at` was incorporated into the cache key rather that the version. That behavior is still available by setting `config.active_record.cache_versioning = false` in `config/application.rb`. 
+
 For data models with a `has_one` or `has_many` association, nested (Russian Doll) caching is possible with the inner fragment representing the associated record. For example if a product has many games -
 ```
 <% cache product do %>
@@ -35,14 +39,14 @@ end
 
 Part of the beauty of this approach is the fact that any change in data requiring the cache to be refreshed is detected by inspecting just a single `updated_at` attribute of each record.  However it is less effective at handling cases where the content of a fragment depends in more complex ways on multiple records from multiple models. The fact that automatic updating of nested fragments is limited to `belongs_to` associations is one aspect of this.
 
-It is certainly possible to construct more complex keys from multiple records and models. However this requires retrieving all of those records from the database and computing keys from them for all fragments contained in the server's response every time a request is received, potentially undermining the benefit caching is intended to provide. A related challenge exists in dealing with user-specific content. Here again the user record can easily be incorporated into the key. However if the content of a fragment really must be customized to individual users, this can lead to the number of cache entries escalating dramatically.
+It is certainly possible to construct more complex keys and/or versions from multiple records and models. However this requires retrieving all of those records from the database and computing keys from them for all fragments contained in the server's response every time a request is received, potentially undermining the benefit caching is intended to provide. A related challenge exists in dealing with user-specific content. Here again the user record can easily be incorporated into the key. However if the content of a fragment really must be customized to individual users, this can lead to the number of cache entries escalating dramatically.
 
-A further limitation is that the rendering and storage of cache content relies on an explicit request being received from a user's browser, meaning that at least one user experiences a response time that doesn't benefit from caching every time a relevant change in data occurs. Nested fragments can mitigate this problem for pre-existing pages, since only part of the response need be re-built, but we are still left with the challenge of how to implement nesting in the case of more complex data associations.
+A further limitation is that the rendering and storage of cache content relies on an explicit request being received from a user's browser, meaning that at least one user experiences a response time that doesn't benefit from caching every time a relevant change in data occurs. Nested fragments can mitigate this problem for pre-existing pages, since only part of the response need be re-built, though we are still left with the challenge of how to implement nesting in the case of more complex data associations.
 
 ## Fragmentary - General Approach
-Fragmentary uses a database table and corresponding ActiveRecord model that are separate from your application data specifically to represent view fragments. Records in this table serve only as metadata, recording the type of content each fragment contains, where it is located, and when it was last updated. These records play the same role with respect to caching as an application data record in Rails' native approach, i.e. internally a fragment record is passed to Rails' `cache` method in the same way that `product` was in the earlier example, and the cache key is derived from the fragment record's `updated_at` attribute. A publish-subscribe mechanism is used to automatically update this timestamp whenever any application data affecting the content of a fragment is added, modified or destroyed, causing the fragment's cached content to be expired.
+In Fragmentary, view fragments are associated with records from an ActiveRecord model and corresponding database table that are _separate_ from your application data. Records in this table serve only as metadata, recording the type of content each fragment contains, where it is located, and when it was last updated. These records play the same role with respect to caching as an application data record in Rails' native approach, i.e. internally a fragment record is passed to Rails' `cache` method in the same way that `product` was in the earlier example, and the version of a cache entry is derived from the fragment record's `updated_at` attribute. A publish-subscribe mechanism is used to automatically update this timestamp whenever any application data affecting the content of a fragment is added, modified or destroyed, causing the fragment's cached content to be expired.
 
-To support fragment nesting, each fragment record also includes a `parent_id` attribute pointing to its immediate parent, or containing, fragment. Whenever the `updated_at` attribute on an inner fragment changes (initially as a result of a change in some application data the fragment is associated with), as well as expiring the cached content for that fragment, the parent fragment is automatically touched, thus expiring the containing cache as well. This process continues up through all successive ancestors, ensuring that the whole page (or part thereof in the case of some AJAX requests) is refreshed.
+To support fragment nesting, each fragment record also includes a `parent_id` attribute pointing to its immediate parent, or containing, fragment. Whenever the `updated_at` attribute on an inner fragment changes (initially as a result of a change in some application data the fragment is associated with), as well as expiring the cached content for that fragment, the parent fragment is automatically touched, thus expiring the containing cache as well. This process continues up through all successive ancestors, ensuring that all of the cached content containing the change is refreshed.
 
 Rather than use Rails' native `cache` helper directly, Fragmentary provides some new helper methods that hide some of the necessary internals involved in working with an explicit fragment model. Additional features include the ability to cache separate versions of fragments for different types of users and the ability to insert user-specific content after cached content is retrieved from the cache store. Fragmentary also supports automatic background updating of cached content within seconds of application data changing, avoiding the need for a user to visit a page in order to update the cache.
 
@@ -117,15 +121,30 @@ class ProductTemplate < Fragment
   needs_record_id :type => 'Product'
 end
 ```
-Here `needs_record_id` indicates that there is a separate `ProductTemplate` fragment associated with each `Product` record. If you need to define further subclasses of your initial subclass, you can if necessary declare `needs_record_id` on the latter without providing a type and specify the type separately on the individual subclasses using:
+Here `needs_record_id` indicates that there is a separate `ProductTemplate` fragment associated with each `Product` record and the `record_id` attribute of a `ProductTemplate` record contains the `id` of that product.
+
+If you need to define further subclasses of your initial subclass, you can declare `needs_record_id` on the latter without providing a type and specify the type separately on the individual subclasses using:
 
 `set_record_type 'SomeModelName'`
 
-We've used this, for example, for fragment types representing different kinds of list items that have certain generic characteristics but are used in different contexts to represent different kinds of content.
+We've used this, for example, for fragment types representing different kinds of list items that have certain generic characteristics in common but are used in different contexts to represent content with different sub-class-specific dependencies on application data.
 
-Within the body of the fragment subclass definition, for each application model whose records the content of the fragment depends upon, use the `subscribe_to` method with a block containing method definitions to handle create, update and destroy events on your application data, typically to touch the fragment records affected by the application data change. The names of these methods follow the form used in the wisper-activerecord gem, i.e. `create_<model_name>_successful`, `update_<model_name>_successful` and `destroy_<model_name>_successful`, each taking a single argument representing the application data record that has changed.
+Within the body of the fragment subclass definition, for each application model whose records the content of the fragment depends upon, use the `subscribe_to` method with a block to define methods that handle create, update and destroy events on your application data, typically to touch the fragment records affected by a change in the application data. For example, if product listings include the names of all the categories the products belong to, and those categories are represented by a separate ActiveRecord model, if the wording of a category name changes, you could handle that as follows:
+```
+class ProductTemplate < Fragment
+  needs_record_id :type => 'Product'
 
-Within the body of each method you define within the `subscribe_to` block, you can retrieve and touch the fragment records affected by the change in application data. The method `touch_fragments_for_record` can be used for convenience. That method takes an individual application data record or record_id or an array of either. So, for example, if product listings include the names of all the categories the products belong to, with those categories being represented by a separate ActiveRecord model, and the wording of a category name changes, you could handle that as follows.
+  subscribe_to 'ProductCategory' do
+    def update_product_category_successful(product_category)
+      # touch ProductTemplate records whose record_id matches the ids of products within the specified product_category
+      ProductTemplate.where(:record_id => product_category.products.map(&:id)).each(&:touch)
+    end
+  end
+end
+```
+The effect of this will be to expire the product template fragment for every product contained within the affected category. `subscribe_to` takes one parameter, the name of the application data class being handled, while the names of the methods defined within the block follow the form used in the wisper-activerecord gem, i.e. `create_<model_name>_successful`, `update_<model_name>_successful` and `destroy_<model_name>_successful`, each taking a single argument representing the application data record that has changed.
+
+Within the body of each method that you define within the block, the convenience method `touch_fragments_for_record` can be used retrieve and touch the fragment records affected by the change in application data. This method takes an individual application data record or a record_id or an array of either. So the example above can be written instead as:
 ```
 class ProductTemplate < Fragment
   needs_record_id :type => 'Product'
@@ -137,9 +156,7 @@ class ProductTemplate < Fragment
   end
 end
 ```
-The effect of this will be to expire the product template fragment for every product contained within the affected category.
-
-When implementing the method definitions within the `subscribe_to` block, note that the block will be executed against an instance of a separate `Fragmentary::Subscriber` class that acts on behalf of the particular `Fragment` subclass we are defining (so the methods we define within the block are actually defined on that subscriber object). However, _all other_ methods called on the `Subscriber` object, including those called from within the methods we define in the block, are delegated by `method_missing` to the fragment subclass. So in the example, `touch_fragments_for_record` called from within `update_product_category_successful` represents `ProductTemplate.touch_fragments_for_record`. This method is defined by the `Fragment` class, so is available to all fragment subclasses.
+When implementing the method definitions within the `subscribe_to` block, note that the block will be executed against an instance of a separate `Fragmentary::Subscriber` class that acts on behalf of the particular `Fragment` subclass we are defining. So the methods we define within the block are actually defined on that subscriber object. However, _all other_ methods called on the `Subscriber` object, including those called from within the methods we define in the block, are delegated by `method_missing` to the associated fragment subclass. So in the example, `touch_fragments_for_record` called from within `update_product_category_successful` represents `ProductTemplate.touch_fragments_for_record`. This method is defined by the `Fragment` class, so is available to all fragment subclasses.
 
 Note also that for fragment subclasses that declare `needs_record_id`, there is no need to define a `destroy_<model_name>_successful` method simply to remove a fragment whose `record_id` matches the `id` of a <model_name> application record that is destroyed, e.g. to destroy a `ProductTemplate` whose `record_id` matches the `id` of a destroyed `Product` object. Fragmentary handles this clean-up automatically. This is not to say, however, that 'destroy' handlers are never needed at all. The destruction of an application data record will often require other fragments to be touched.
 
@@ -158,7 +175,7 @@ A 'root' fragment is one that has no parent. In the template in which a root fra
 
 #### Nested Fragments
 
-The variable `fragment` that is yielded to the block above is an object of class `Fragmentary::FragmentsHelper::CacheBuilder`, which contains both the actual ActiveRecord fragment record found or created by `cache_fragment` *and* the current template as instance variables. The class has one public instance method defined, `cache_child`, which can be used to define a child fragment nested within the first. The method is used _within_ a block of content defined by `cache_fragment` and much like `cache_fragment` it takes a hash of options that uniquely identify the child fragment. Also like `cache_fragment` it yields another `CacheBuilder` object and wraps a block containing the content of the child fragment to be cached.
+The variable `fragment` that is yielded to the block above is an object of class `Fragmentary::FragmentsHelper::CacheBuilder`, which contains both the actual ActiveRecord fragment record found or created by `cache_fragment` *and* the current template's execution context (i.e. the receiver of the `cache_fragment` method) as instance variables. The class has one public instance method defined, `cache_child`, which can be used to define a child fragment nested within the first. The method is used _within_ a block of content defined by `cache_fragment` and much like `cache_fragment` takes a hash of options that uniquely identify the child fragment. Also like `cache_fragment` it yields another `CacheBuilder` object and wraps a block containing the content of the child fragment to be cached.
 ```
 <% cache_fragment :type => 'ProductTemplate', :record_id => @product.id do |fragment| %>
   <% fragment.cache_child :type => 'StoresAvailable' do |child_fragment| %>
@@ -187,9 +204,11 @@ class StoresAvailable < Fragment
   acts_as_list_fragment :members => :product_stores, :list_record => :product
 end
 ```
+The effect of this declaration is to ensure that whenever a new `ProductStore` is created, the `StoresAvailable` record for the corresponding product will be touched, so that the next time the list is rendered, the required new `AvailableStore` fragment will be created.
+
 `acts_as_list_fragment` takes two named arguments:
-* `members` is the name of the list membership association in snake case, or tableized, form. The creation of an association of that type triggers the addition of a new item to the list. In the example, it is the creation of a new `product_store` that results in a new item being added to the list. The effect of declaring `acts_as_list_fragment` is to ensure that when that membership association is created, the list fragment it is being added to is touched, expiring the cache so that on the next request the list will be re-rendered, which has the effect of creating the required new `AvailableStore` fragment. Note that the value of the `members` argument should match the record type of the list item fragments. So in the example, the `AvailableStore` class should be defined with `needs_record_id, :type => ProductStore` (We recognize there's some implied redundancy here that could be problematic; some adjustment may be made in the future).
-* `list_record` is either the name of a method (represented by a symbol) or a `Proc` that defines how to obtain the record_id (or the record itself; either will work) associated with the list fragment from a given membership association. If the value is a method name, the list record is found by calling that method on the membership association. In the example, the membership association is a `ProductStore` record, say `product_store`. The list is represented by a `StoresAvailable` fragment whose `record_id` points to a `Product` record. We can get that `Product` record simply by calling `product_store.product`, so the `list_record` parameter passed to `acts_as_list_fragment` is just the method `:product` (`:product_id` would also work). However sometimes a simple method like this is insufficient and a `Proc` may be used instead. In this case the newly created membership association is passed as a parameter to the `Proc` and we can implement whatever functional relationship is necessary to obtain the list record. In this simple example, if we wanted (for no good reason) to use a `Proc`, it would look like `->(product_store){product_store.product}`.
+* `members` is the name of the list membership association in snake case, or tableized, form. The creation of an association of that type is what triggers the addition of a new item to the list. In the example, it is the creation of a new `product_store` that results in a new item being added to the list. Note that the value of the `members` argument should match the record type of the list item fragments (i.e. the type provided to `needs_record_id` in the definition of the list item fragment class). So in the example, the `AvailableStore` class would be defined with `needs_record_id, :type => ProductStore` (We recognize there's some implicit redundancy here that could be problematic; some adjustment may be made in the future).
+* `list_record` is either the name of a method (represented by a symbol) or a `Proc` that defines how to obtain the `record_id` (or the record itself; either will work) associated with the list fragment from a given membership association. So, in the example, the membership association is a `ProductStore` record, say `product_store`, and `:product` is the method that would be called on `product_store` to produce the product whose `id` is the `record_id` of the `StoresAvailable` list fragment that needs to be touched when a new list item is created (`:product_id` would also work). Sometimes, however, a simple method like this is insufficient and a `Proc` may be used instead. The newly created membership association is passed as a parameter to the `Proc` and we can implement whatever functional relationship is necessary to obtain the list record. In this simple example, if we wanted (for no good reason) to use a `Proc`, it would look like `->(product_store){product_store.product}`.
 
 Note that in the example, the specified `list_record` method, `:product`, returns a single record for a given `product_store` membership association. However this isn't necessarily always the case. The method or `Proc` may also return an array of records or record_ids.
 
@@ -219,7 +238,7 @@ then creating an initial product_store association won't add the initial item si
 <% end %>
 ```
 
-It is also worth noting that you are completely free to create lists without using `acts_as_list_fragment` at all. You just have to make sure that you explicitly provide a handler yourself in a `subscribe_to` block to touch any affected list fragments when a new membership association is created. In the example this would look like the following.
+It is also worth noting that you are completely free to create lists without using `acts_as_list_fragment` at all. You just have to make sure that you explicitly provide a handler yourself in a `subscribe_to` block to touch any affected list fragments when a new membership association is created. In the example, this would look like the following.
 ```
 class StoresAvailable < Fragment
   subscribe_to 'ProductStore' do
@@ -230,13 +249,13 @@ class StoresAvailable < Fragment
 end
 ```
 
-In fact there can be cases where it is actually necessary to take an explicit approach like this. Using `acts_as_list_fragment` assumes that we can identify the list fragments to be touched by identifying their associated `record_id`s (this is the point of the method's `list_record` parameter). However, we have seen a situation where the set of list fragments that needed to be touched required a complex inner join between the `fragments` table and multiple application data tables, and this produced the list fragments to be touched directly rather than a set of associated record_ids.
+In fact there can be cases where it is necessary to take an explicit approach like this. Using `acts_as_list_fragment` assumes that we can identify the list fragments to be touched by identifying their associated `record_id`s (this is the point of the method's `list_record` parameter). However, we have seen a situation where the set of list fragments that needed to be touched required a complex inner join between the `fragments` table and multiple application data tables, and this produced the list fragments to be touched directly rather than a set of associated record_ids.
 
 ### Accessing Fragments by Arbitrary Application Attributes
 
-The examples above involved fragments associated with specific application data records via the `record_id` attribute. The fragments were uniquely identified by the fragment type, the `parent_id` if the fragment is nested, and the `record_id`.
+The examples above involved fragments associated with specific application data records via the `record_id` attribute. The fragments were uniquely identified by the `record_id`, the fragment type, and the `parent_id` if the fragment is nested.
 
-Of course it is not always necessary to have a `record_id`, for example in the case of an index page. On the other hand, there are also cases where something other than a `record_id` is needed to uniquely identify a fragment. Suppose, for example, you have a fragment that renders a set of books published in a certain year, a set of restaurants in a certain postcode, or a set of individuals (say sporting event competitors) in a particular age-group category. In cases like these we need to be able to uniquely identify the fragment again by its type and its `parent_id` (if it is nested), but also by some other parameter, which we refer to as a 'key' (the terminology may be a little unfortunate; this is not the same thing as a _cache key_).
+Of course, it is not always necessary to have a `record_id`, for example in a fragment representing a list of items on an index page. On the other hand, there are also cases where something other than a `record_id` is needed in order to uniquely identify a fragment. Suppose, for example, you have a fragment that renders a set of books published in a certain year, a set of restaurants in a certain postcode, or a set of competitors in a sporting event within a particular age-group category. In cases like these we need to be able to uniquely identify the fragment again by its type and sometimes its `parent_id` (if it is nested), but also by some other parameter, which we refer to as a 'key' (the terminology may be a little unfortunate; this is not the same thing as a _cache key_).
 
 To facilitate this, the fragment model includes a `key` attribute that can be customized on a per-class basis using the `needs_key` method. For example,
 ```
@@ -253,7 +272,7 @@ With this definition we can define the cached content like this:
   <% end %>
 <% end %>
 ```
-Internally, the `key` attribute is a string, but the value of the custom option passed to either `cache_fragment` or `cache_child` can be a string or anything that responds to `to_s`. Declaring `needs_key` also creates an instance method on your class with the same name as the key, so if you need to access the value of the key from the fragment, instead of writing `fragment.key` you could for example write `fragment.year_of_publication`.
+Internally, the `key` attribute is a string, but the value of the custom option passed to either `cache_fragment` or `cache_child` (`year` in the example above) can be a string or anything that responds to `to_s`. Declaring `needs_key` also creates an instance method on your class with the same name as the key, so if you need to access the value of the key from the fragment, instead of writing `fragment.key` you could in this example write `fragment.year_of_publication`.
 
 ### User Specific Content
 
@@ -489,9 +508,9 @@ When application data that a cached fragment depends upon changes, i.e. as a res
 
 As part of this process, new fragment records may be created as *children* of an existing fragment if the existing fragment contains newly added list items. A new *root* fragment, on the other hand, will be created for any root fragment class defined with `needs_record_id` if an application data record of the associated `record_type` is created, as soon as a browser request is made for the new content (often a new page) containing that fragment.
 
-Sometimes, however, it is desirable to avoid having to wait for an explicit request from a user in order to update the cache or to create new cached content. To deal with this, Fragmentary provides a mechanism to automatically create or refresh cached content preemptively, essentially as soon as a change in application data occurs. Rails' `ActionDispatch::Integration::Session` [class](https://github.com/rails/rails/blob/master/actionpack/lib/action_dispatch/testing/integration.rb) provides an interface that allows requests to be sent directly to the application programmatically, without generating any external network traffic. Fragmentary uses this interface to automatically send requests needed to update the cache whenever changes in application data occur.
+Sometimes, however, it is desirable to avoid having to wait for an explicit request from a user in order to update the cache or to create new cached content. To deal with this, Fragmentary provides a mechanism to automatically create or refresh cached content preemptively, essentially as soon as a change in application data occurs. Rails' `ActionDispatch::Integration::Session` [class](https://github.com/rails/rails/blob/master/actionpack/lib/action_dispatch/testing/integration.rb) provides an interface that allows requests to be sent directly to the application programmatically, without generating any external network traffic. Fragmentary uses this interface to automatically send requests needed to update the cache whenever changes in application data occur. These 'internal' requests are sent asynchronously so that they do not delay the response to the external POST, PATCH or DELETE request from the user's browser that brought about the change in application data.
 
-Creating these requests is handled slightly differently depending on whether they are designed to update content associated with an existing root fragment or to create content for a new root fragment that does not yet exist. In the case of an existing root fragment, if the fragment's class has a `request_path` *instance* method defined, a request will be sent to the application at that path (represented in the form of a string) whenever `touch` is called on the fragment record (in general, the request can be suppressed by passing `:no_request => true` if required). You simply need to define the `request_path` method in any individual `Fragment` subclass that you wish to generate requests for. For example:
+Creating internal requests is handled slightly differently depending on whether they are designed to update content associated with an existing root fragment or to create content for a new root fragment that does not yet exist. In the case of an existing root fragment, if the fragment's class has a `request_path` *instance* method defined, a request will be sent to the application at that path (represented in the form of a string) whenever `touch` is called on the fragment record (If required, the request can be suppressed by passing `:no_request => true` to `touch`). You simply need to define the `request_path` method in any individual `Fragment` subclass that you wish to generate requests for. For example:
 ```
 class ProductTemplate < Fragment
   needs_record_id :type => 'Product'
@@ -523,15 +542,15 @@ So in this example, any time a new `Product` record is created, Fragmentary will
 
 #### Request Queues
 
-A single external HTTP POST, PATCH or DELETE request can cause changes to application data affecting multiple fragments on multiple pages. One external request can therefore lead to multiple internal application requests. In addition, considering that different versions of some cached fragments exist for different user types, in  order to ensure that all affected versions get refreshed we may need to send each internal request multiple times in the context of several different user sessions, each representing a different user type.
+A single external HTTP POST, PATCH or DELETE request can cause changes to application data affecting multiple fragments on multiple pages. One external request can therefore lead to multiple internal application requests. In addition, given that different versions of some cached fragments may exist for different user types, we may need to send each internal request multiple times in the context of several different user sessions (representing different user types), to ensure that all affected versions get refreshed.
 
-To achieve this, during handling of the initial external request in which changes in application data propagate to affected fragment records via the `subscribe_to` declarations in your fragment class definitions, multiple instances of class `Fragmentary::RequestQueue`, each corresponding to a different user type, are used to store a collection of `Fragmentary::Request` objects representing the internal requests generated during that process.
+To achieve this, during the handling of the initial external request that causes the application data to change, the internal requests created as a result are represented by instances of the class `Fragmentary::Request` and are initially stored in a number of 'queues' represented by instances of the class `Fragmentary::RequestQueue`. Separate queues exist for each of the different user types supported by the fragments to be rendered, and individual requests to a given endpoint are automatically placed in multiple queues as needed. However, responsibility for actually sending the requests stored in the queues is offloaded to an asynchronous process using Rails' `ActiveJob` interface (as detailed below under [Sending Queued Requests](https://github.com/MarkMT/fragmentary#sending-queued-requests)).
 
-The set of user types that an individual `Fragment` subclass is expected to support is available via a configurable class method `user_types`, which returns an array of user type strings (Note this is different from the class method `user_type` discussed earlier that returns a single user type for a specific current user).
+`Fragment` subclasses inherit both class and instance methods `request_queues` that return a hash of queues keyed by each of the specific user type strings that that specific subclass supports. So, for example, a `ProductTemplate` fragment may have two different request queues, `ProductTemplate.request_queues["admin"]` and `ProductTemplate.request_queues["signed_in"]`.
 
-Configuration of the `user_types` method is discussed in the next section. Fragmentary uses the types returned by this method to identify the request queues that each internal application request needs to be added to when instances of each particular `Fragment` subclass are updated. `Fragment` subclasses inherit both class and instance methods `request_queues` that return a hash of queues keyed by each of the specific user type strings that that specific subclass supports.
+The set of user types that an individual `Fragment` subclass is expected to support is available via a configurable class method `user_types`, which returns an array of user type strings (Note this is different from the class method `user_type` discussed earlier that returns a single user type for a specific current user). Configuration of the `user_types` method is discussed in the next section.
 
-The request queue for any given user type is shared across all `Fragment` subclasses within the application. So for example, a `ProductTemplate` fragment may have two different request queues, `ProductTemplate.request_queues["admin"]` and `ProductTemplate.request_queues["signed_in"]`. If a `StoreTemplate` fragment has one request queue `StoreTemplate.request_queues["signed_in"]`, the `"signed_in"` queues for both classes represent the same object.
+The request queue for any given user type is shared across all `Fragment` subclasses within the application. So for example,`ProductTemplate.request_queues["signed_in"]` and `StoreTemplate.request_queues["signed_in"]` both represent the same object.
 
 #### Configuring Internal Request Users
 
@@ -569,16 +588,34 @@ The value of the `:session_users` option (you can also use `:user_types` or just
 
 #### Sending Queued Requests
 
-A class method `Fragmentary::RequestQueue.all` returns an array of all request queues the application uses. The requests stored within a given `RequestQueue` can be sent to the application by calling the instance method `RequestQueue#send`. Calling `send` instantiates a `Fragmentary::UserSession` object representing a browser session for the particular type of user the queue is handling. For sessions representing user types that need to be authenticated, instantiating the `UserSession` will sign in to the application using the credentials configured for the particular `user_type`.
+Internal requests stored in the application's request queues are typically sent using an `after_action` filter in your `ApplicationController`, e.g. for create, update and destroy actions:
+```
+class ApplicationController
+  after_action :send_queued_requests, :only => [:create, :update, :destroy]
 
-To send all requests once processing of each external browser request has been completed, add a method such as the following to your `ApplicationController` class and call it using a controller `after_filter`, e.g. for create, update and destroy actions:
+  def send_queued_requests
+    Fragmentary::RequestQueue.send_all(:between => 10.seconds)
+  end
+end
+```
+The optional named argument `between` represents the interval between individual requests in each queue being sent and allows you to throttle the request rate. If it is present (including `:between => 0.seconds`), the requests will be sent asynchronously using ActiveJob. If omitted, requests will be sent immediately (i.e before the response to the original external request is sent to the user's browser).
+
+You can customize further by sending requests from queues individually. A class method `Fragmentary::RequestQueue.all` returns an array of all request queues that the application uses. The requests stored within an individual queue can be sent by calling the instance method `RequestQueue#send`.
 ```
 def send_queued_requests
   delay = 0.seconds
   Fragmentary::RequestQueue.all.each{|q| q.send(:delay => delay += 10.seconds)}
 end
 ```
-The `send` method takes two optional named arguments, `delay` and `between`. If neither are present, all requests held in the queue are sent immediately. If either are present, sending of requests is off-loaded to an asynchronous process using the [Delayed::Job gem](https://github.com/collectiveidea/delayed_job) (i.e. we are not currently using Active Job) and scheduled according to the parameters provided: `delay` represents the delay before the queue begins sending requests and `between` represents the interval between individual requests in the queue being sent. In the example above, we choose to delay the sending of requests from each queue by 10 seconds each. You may customize as appropriate.
+`send` takes two optional named arguments, `delay` and `between`. `delay` represents the delay before the queue begins sending requests and `between` again represents the interval between individual requests. In the example above, we choose to delay the sending of requests from each queue by 10 seconds each. If either are present (including `:delay => 0`), the requests will be sent asynchronously using ActiveJob. If omitted, all requests held in the queue are sent immediately.
+
+When requests are sent using either `send` or `send_all`, a `Fragmentary::UserSession` object is instantiated representing a browser session for the particular type of user the queue is handling. For sessions representing user types that need to be authenticated, instantiating the `UserSession` automatically signs in to the application using the credentials configured for the particular `user_type`.
+
+ActiveJob supports a number of adapters for executing tasks asynchronously. You should configure according to your own needs. For example, to use Fragmentary with the [Delayed::Job](https://github.com/collectiveidea/delayed_job) gem, you would add the following to your `config/application.rb` file:
+```
+config.active_job.queue_adapter = :delayed_job
+```
+and add the 'delayed_job_active_record' gem to your Gemfile. Consult the [ActiveJob documentation](https://guides.rubyonrails.org/active_job_basics.html#backends) for more information as well as the documentation for your chosen adapter on how to start background task processes when you deploy your application.
 
 #### Queuing Requests Explicitly
 
@@ -628,31 +665,20 @@ class AvailableStore < Fragment
   end
 end
 ```
-While a `Handler` subclass definition defines a task to be run asynchronously, and calling the class method `create` within a `subscribe_to` block causes the task to be instantiated, we still have to explicitly dispatch the task to an asynchronous process, which we again (currently) do using Delayed::Job.
+While a `Handler` subclass definition defines a task to be run asynchronously, and calling the class method `create` within a `subscribe_to` block causes the task to be instantiated, we still have to explicitly dispatch the task to an asynchronous process. We again do this using ActiveJob in an `ApplicationController` `after_filter`. In fact we can combine both the sending of background requests and the asynchronous fragment updating task in one method:
 
-To facilitate this we use the `Fragmentary::Dispatcher` class. A dispatcher object is instantiated with an array containing all existing handlers, retrieved using the class method `Fragmentary::Handler.all`.
 ```
-dispatcher = Fragmentary::Dispatcher.new(Fragmentary::Handler.all)
-```
-The `Dispatcher` class defines an instance method `perform`, which invokes `call` on all the handlers provided when the dispatcher is instantiated. Delayed::Job uses the `perform` method to define the job to be run asynchronously, which is accomplished by passing the dispatcher object to `Delayed::Job.enqueue`:
-```
-Delayed::Job.enqueue(dispatcher)
-```
-As in the case of our queued background requests, we enqueue the dispatcher in an `ApplicationController` `after_filter`. In fact we can combine both the sending of background requests and the asynchronous fragment updating task in one method:
-```
-class ApplicationController < ActionController::Base
-
-  after_filter :handle_asynchronous_tasks
-
-  def handle_asynchronous_tasks
-    send_queued_requests  # as defined earlier
-    Delayed::Job.enqueue(Fragmentary::Dispatcher.new(Fragmentary::Handler.all))
-    Fragmentary::Handler.clear
-  end
-
+def handle_asynchronous_tasks
+  send_queued_requests  # as defined earlier
+  Fragmentary::DispatchHandlersJob.perform_later(Fragmentary::Handler.all)
+  Fragmentary::Handler.clear
 end
 ```
-Note that updating fragments in an asynchronous process like this will itself generate internal application requests beyond those generated in the course of handling the user's initial request. The `Dispatcher` takes care of sending these additional requests.
+Here `Fragmentary::DispatchHandlersJob` is a subclass of `ActiveJob::Base`, which means if you wish you can specify additional options using the `set` method, e.g.
+```
+Fragmentary::DispatchHandlersJob.set(:wait => 1.minute, :queue => 'low_priority').perform_later(Fragmentary::Handler.all)
+```
+Also note that updating fragments in an asynchronous process like this will itself generate internal application requests beyond those generated in the course of handling the user's initial request. `DispatchHandlersJob` also takes care of sending these additional requests.
 
 #### Updating Lists Asynchronously
 
@@ -790,7 +816,6 @@ Fragmentary.setup do |config|
   ...
   config.application_root_url_column = 'app_root'
 end
-
 ```
 
 Once this column has been added to the `fragments` table, any fragment records subsequently created by calls to `cache_fragment` or `cache_child` will have the column populated automatically based on the particular application instance in which the code is executed, and the content stored in the cache for each fragment record will be that generated by the corresponding instance. As long as any links rendered within the content are generated using Rails' path or url helpers, the cached content will be rendered correctly both when initially created and when retrieved subsequently.
@@ -803,11 +828,9 @@ The fact that two versions of content exist in the cache for each fragment means
 
 (Note: for better or worse, we've stuck with the term 'internal request' to mean any request delivered to the application programmatically in order to refresh cached content. This includes requests created by one application instance that are intended to be processed by another instance.)
 
-Our approach to sending requests between application instances relies on requests being processed asynchronously (i.e. by passing a `delay` value to RequestQueue#send in the controller method `send_queued_requests` discussed earlier). The reason is that asynchronous tasks used to process internal requests can be directed to specific task queues associated with the application instance they are intended to be processed by. Each application instance has an associated asynchronous task process. By configuring that process to run tasks from just the queue(s) designated for it, we ensure that any application instance can direct requests to any other.
+Our approach to sending requests between application instances relies on processing requests asynchronously and directing the tasks used to do this to specific task queues associated with the application instance they are intended to be processed by. Each application instance has an associated asynchronous task process (in our case using Delayed::Job). By configuring that process to run tasks from just the queue(s) designated for it, we ensure that any application instance can direct requests to any other. As long as queued tasks are stored in a database table (as they are, for example, using Delayed::Job) and provided that each instance of the application has access to the same database, this approach achieves our objective. The way we accomplish this in practice is outlined below.
 
-As noted earlier, our current implementation relies on [Delayed::Job](https://github.com/collectiveidea/delayed_job) for creating and processing asynchronous tasks. Queued tasks are stored in a database table, so as long as each application and [Delayed::Job](https://github.com/collectiveidea/delayed_job) instance have access to the same database, this approach will be successful.
-
-To configure Fragmentary to automatically refresh cached content for multiple instances, first set `remote_urls` in `Fragmentary.config`. This is an array of root URLs for all _other_ instances of the application that requests should be sent to. For example, in order to allow requests to be sent from the production instance to the pre-release instance, in initializers/fragmentary.rb in the production code we would add the following configuration:
+First, to configure Fragmentary to automatically refresh cached content for multiple instances, set `remote_urls` in `Fragmentary.config`. This is an array of root URLs for all _other_ instances of the application that requests should be sent to. For example, in order to allow requests to be sent from the production instance to the pre-release instance, in initializers/fragmentary.rb in the production code we would add the following configuration:
 
 ```
 Fragmentary.setup do |config|
@@ -818,38 +841,47 @@ end
 
 Our current approach to application deployment is to maintain different branches in our source repository for each application instance. This allows us to keep custom configurations like `config.remote_urls` above for each instance on their own branches. So in contrast to the case above, to allow requests to be sent from the pre-release instance to the production instance, in initializers/fragmentary.rb on the pre-release branch the `remote_urls` array would be set to `['http://myapp.com/']` .
 
-As an alternative, it may be possible to create a separate environment for the pre-release deployment in your config/environments directory and thus maintain the configuration for all application instances in a single repository branch. We have not investigated this approach.
+As an alternative, it would also be possible to create a separate environment for the pre-release deployment in your config/environments directory and thus maintain the configuration for all application instances in a single repository branch. We have not investigated this approach.
 
-By specifying `remote_urls` as described above, for each internal application request Fragmentary will automatically create tasks to process the request not only on the application instance where it was created but also on all other instances corresponding to the elements in `remote_urls`. Fragmentary sends these tasks to [Delayed::Job](https://github.com/collectiveidea/delayed_job) queues that have names formed from the domain name and path of both the root URL of the current instance and the values in `remote_urls`. So in the example, a request to '/products/123', created say by editing a product name on the production website, would be sent to [Delayed::Job](https://github.com/collectiveidea/delayed_job) queues with names 'myapp.com' and 'myapp.com/prerelease/'.
+By specifying `remote_urls` as described above, for each internal application request Fragmentary will automatically create tasks to process the request not only on the application instance where it was created but also on all other instances corresponding to the elements in `remote_urls`. Fragmentary sends these tasks to named queues whose names are formed automatically from the domain name and path of both the root URL of the current instance and the values in `remote_urls`. So in the example, a request to '/products/123', created say by editing a product name on the production website, would be sent to queues with names 'myapp.com/' and 'myapp.com/prerelease/'.
 
-The final step needed to allow internal requests to be processed by the instance they are intended for is to configure the [Delayed::Job](https://github.com/collectiveidea/delayed_job) process associated with each instance to process tasks from the correct queue.
-
-In our case we use Capistrano 2 for deployment and use `delayed_job_args` in config/deploy.rb to configure queue names (see documentation [here](https://github.com/collectiveidea/delayed_job/blob/master/lib/delayed/recipes.rb)):
-
+The final step is to configure the asynchronous processes associated with each application instance to execute tasks from the correct queue. In our case, we use [Delayed::Job](https://github.com/collectiveidea/delayed_job) to handle asynchronous tasks and Capistrano 2 for deployment. We set `delayed_job_args` in `config/deploy.rb` to configure the queue names as follows (see documentation [here](https://github.com/collectiveidea/delayed_job/blob/master/lib/delayed/recipes.rb)):
 ```
 queue_prefix = "myapp.com/prerelease/"
-set :delayed_job_args, "--queue=#{queue_prefix},#{queue_prefix}_overnight"
+set :delayed_job_args, "--queue=#{queue_prefix}"
 after "deploy:stop",    "delayed_job:stop"
 after "deploy:start",   "delayed_job:start"
 after "deploy:restart", "delayed_job:restart"
 ```
+Again, this configuration will be different for each instance, and so in our case each one is stored in different source repository branches.
 
-Again, this configuration will be different for each instance and so in our case each one will be stored in different source repository branches.
-
-Note that if you configure [Delayed::Job](https://github.com/collectiveidea/delayed_job) to work only from specific queues, you'll need to make sure that _any_ asynchronous tasks created by your application are submitted to one of those queues.
+Note that if you configure [Delayed::Job](https://github.com/collectiveidea/delayed_job) (or other backend) to work only from specific queues, you'll need to make sure that _any_ asynchronous tasks created by your application are submitted to one of those queues.
 
 ## Dependencies
 
-  - The current implementation of Fragmentary has been tested using Rails 5. It does not work with earlier versions of Rails due to a change in the API for Rails `ActionDispatch::Integration::Session` class. We do have a 'Rails.4.2' branch that uses the older API in the github repository. However this branch is no longer maintained.
-  - As noted, Fragmentary uses the [Delayed::Job](https://github.com/collectiveidea/delayed_job) gem to execute background tasks asynchronously.
+  - Fragmentary is currently being used in production with Rails 6.0. Versions >=0.4 do not work with earlier versions of Rails for a couple of reasons:
+    - The version of ActiveJob in Rails 5.x does not support the custom serialization needed to enqueue asynchronous tasks for sending internal requests. A repository branch 'delayed_job' is available that uses the [Delayed::Job](https://github.com/collectiveidea/delayed_job) gem directly (i.e. without ActiveJob) and this works well with Rails 5.x. However, this branch is no longer maintained.
+    - The API for the Rails `ActionDispatch::Integration::Session` class, which is used to handle internal application requests, was changed in Rails 5.0. Consequently the current version of Fragmentary is incompatible with Rails 4.x and earlier. We do have a 'Rails.4.2' branch in the repository that uses the older API. However, this branch is no longer maintained.
+
+## Timestamps
+Fragmentary allows HTML comments to be optionally inserted into cached fragments identifying the time at which the fragment was last cached. Simply add `config.insert_timestamps = true` to the configuration block in your `config/initializers/fragmentary.rb` file.
+
+It is also possible to insert comments identifying a version name for the application code in use at the time the fragment was cached and the time at which that version was deployed. This is accomplished by dynamically adding values for the configuration settings `Fragmentary.config.release_name` and `Fragmentary.config.deployed_at` to your `config/initializers/fragmentary.rb` file at the time you deploy. ie. within your deployment script you need to arrange to append something like the following to that file.
+```
+Fragmentary.config.release_name = release_name
+Fragmentary.config.deployed_at = deployed_at
+```
+It is up to you how you define/determine these values, but `deployed_at` would typically represent the value of `Time.now.utc` at the time the deployment script is executed. If these two configuration values are set, and `Fragmentary.config.insert_timestamps` is set to true, Fragmentary will automatically insert comments along the lines of the following:
+```
+<!-- ProductDetails 2382 cached by Fragmentary version 0.4 at 2023-09-22 09:28:02 UTC -->
+<!-- Cached using application release 20230919233149 deployed at 2023-09-19 23:33:16 UTC -->
+... Cached content appears here ...
+<!-- ProductDetails 2382 ends -->
+```
 
 ## Contributing
 
 Bug reports and usage questions are welcome at https://github.com/MarkMT/fragmentary.
-
-## Testing
-
-You're welcome to write some tests!!!
 
 ## License
 
