@@ -864,6 +864,7 @@ Note that if you configure [Delayed::Job](https://github.com/collectiveidea/dela
     - The API for the Rails `ActionDispatch::Integration::Session` class, which is used to handle internal application requests, was changed in Rails 5.0. Consequently the current version of Fragmentary is incompatible with Rails 4.x and earlier. We do have a 'Rails.4.2' branch in the repository that uses the older API. However, this branch is no longer maintained.
 
 ## Timestamps
+
 Fragmentary allows HTML comments to be optionally inserted into cached fragments identifying the time at which the fragment was last cached. Simply add `config.insert_timestamps = true` to the configuration block in your `config/initializers/fragmentary.rb` file.
 
 It is also possible to insert comments identifying a version name for the application code in use at the time the fragment was cached and the time at which that version was deployed. This is accomplished by dynamically adding values for the configuration settings `Fragmentary.config.release_name` and `Fragmentary.config.deployed_at` to your `config/initializers/fragmentary.rb` file at the time you deploy. ie. within your deployment script you need to arrange to append something like the following to that file.
@@ -878,6 +879,15 @@ It is up to you how you define/determine these values, but `deployed_at` would t
 ... Cached content appears here ...
 <!-- ProductDetails 2382 ends -->
 ```
+
+## Utility Methods
+
+The `Fragment` class and its subclasses provide a number of utility instance methods that are typically useful for interacting with fragments from the console.
+  - `touch_or_destroy` - recursively touches the fragment record and all decendant fragments for which cache entries exist. Destroys any fragment records in the tree for which no cache entry exists.
+  - `cache_exist?` - returns a boolean indicating whether fragment has content stored in the cache.
+  - `content` - retrieves the fragment's cached content
+  - `delete_cache` - removes the fragment's content from the cache.
+  - `delete_cache_tree` - recursively removes from the cache all content for the fragment and its descendants.
 
 ## Contributing
 
