@@ -857,12 +857,6 @@ Again, this configuration will be different for each instance, and so in our cas
 
 Note that if you configure [Delayed::Job](https://github.com/collectiveidea/delayed_job) (or other backend) to work only from specific queues, you'll need to make sure that _any_ asynchronous tasks created by your application are submitted to one of those queues.
 
-## Dependencies
-
-  - Fragmentary is currently being used in production with Rails 6.0. Versions >=0.4 do not work with earlier versions of Rails for a couple of reasons:
-    - The version of ActiveJob in Rails 5.x does not support the custom serialization needed to enqueue asynchronous tasks for sending internal requests. A repository branch 'delayed_job' is available that uses the [Delayed::Job](https://github.com/collectiveidea/delayed_job) gem directly (i.e. without ActiveJob) and this works well with Rails 5.x. However, this branch is no longer maintained.
-    - The API for the Rails `ActionDispatch::Integration::Session` class, which is used to handle internal application requests, was changed in Rails 5.0. Consequently the current version of Fragmentary is incompatible with Rails 4.x and earlier. We do have a 'Rails.4.2' branch in the repository that uses the older API. However, this branch is no longer maintained.
-
 ## Timestamps
 
 Fragmentary allows HTML comments to be optionally inserted into cached fragments identifying the time at which the fragment was last cached. Simply add `config.insert_timestamps = true` to the configuration block in your `config/initializers/fragmentary.rb` file.
@@ -888,6 +882,12 @@ The `Fragment` class and its subclasses provide a number of utility instance met
   - `content` - retrieves the fragment's cached content
   - `delete_cache` - removes the fragment's content from the cache.
   - `delete_cache_tree` - recursively removes from the cache all content for the fragment and its descendants.
+
+## Dependencies
+
+  - Fragmentary is currently being used in production with Rails 6.0. Versions >=0.4 do not work with earlier versions of Rails for a couple of reasons:
+    - The version of ActiveJob in Rails 5.x does not support the custom serialization needed to enqueue asynchronous tasks for sending internal requests. A repository branch 'delayed_job' is available that uses the [Delayed::Job](https://github.com/collectiveidea/delayed_job) gem directly (i.e. without ActiveJob) and this works well with Rails 5.x. However, this branch is no longer maintained.
+    - The API for the Rails `ActionDispatch::Integration::Session` class, which is used to handle internal application requests, was changed in Rails 5.0. Consequently the current version of Fragmentary is incompatible with Rails 4.x and earlier. We do have a 'Rails.4.2' branch in the repository that uses the older API. However, this branch is no longer maintained.
 
 ## Contributing
 
