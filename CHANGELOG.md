@@ -1,3 +1,11 @@
+### 0.4.0
+- Uses ActiveJob as the interface for asynchronous processes instead of using Delayed::Job directly.
+- Updates Rails dependency to ~>6.0 as earlier versions lack support for the custom job serialization needed to use ActiveJob. Accordingly, Rails 5.x and earlier are no longer supported.
+- Adds a convenience method RequestQueue.send_all for sending internal application requests.
+- Inserts optional HTML comments containing time and version stamps into fragment content.
+- Adds utility methods for interacting with the cache_store from the console.
+- Updates documentation for new features and to reflect Rails use of cache versioning.
+
 ### 0.3.0
 - Updates gem to support Rails 5.x (Rails 4.x and earlier are no longer supported due to Rails API changes).
 - Adds support for multiple application instances, allowing pre-release application code to be staged for testing.
