@@ -6,7 +6,7 @@ module Fragmentary
 
     def perform(tasks)
       tasks.each do |task|
-        Rails.logger.info "***** Dispatching task for handler class #{task.class.name}"
+        Rails.logger.info "\n***** Dispatching task for handler class #{task.class.name}"
         task.call
       end
       RequestQueue.all.each do |queue|

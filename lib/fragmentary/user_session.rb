@@ -56,9 +56,9 @@ module Fragmentary
     def sign_in
       raise "Can't sign in without user credentials" unless session_credentials
       send_request(:method => :get, :path => session_sign_in_path, :options => session_options)  # necessary in order to get the csrf token
-      # NOTE: In Rails 5, params is changed to a named argument, i.e. :params => {...}. Will need to be changed.
       # Note that request is called on session, returning an ActionDispatch::Request; request.session is an ActionDispatch::Request::Session
       puts "      * Signing in as #{session_credentials.inspect}"
+      Rails.logger.info "      * Signing in as #{session_credentials.inspect}"
       parameters = session_credentials.merge(:authenticity_token => request.session[:_csrf_token])
       send_request(:method => :post, :path => session_sign_in_path, :parameters => parameters, :options => session_options)
       if @session.redirect?
@@ -143,6 +143,7 @@ module Fragmentary
       # The first request retrieves the authentication token
       response = send_request(:method => :get, :path => Fragmentary.config.get_sign_in_path)
       puts "      * Signing in as #{@credentials.inspect}"
+      Rails.logger.info "      * Signing in as #{@credentials.inspect}"
       response = send_request(:method => :post, :path => Fragmentary.config.post_sign_in_path,
                               :parameters => @credentials.merge(:authenticity_token => @authenticity_token),
                               :options => {:headers => {:accept => "text/html,application/xhtml+xml,application/xml"}})

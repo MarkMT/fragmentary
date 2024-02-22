@@ -131,6 +131,7 @@ module Fragmentary
       private
 
       def send_all_requests
+        clear_session
         while queue.size > 0
           send_next_request
         end
