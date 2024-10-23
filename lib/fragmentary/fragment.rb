@@ -13,13 +13,13 @@ module Fragmentary
       base.class_eval do
         include ActionView::Helpers::CacheHelper
 
-        belongs_to :parent, :class_name => name
-        belongs_to :root, :class_name => name
+        belongs_to :parent, :class_name => name, :optional => true  # because a root fragment doesn't have a parent
+        belongs_to :root, :class_name => name, :optional => true    # or a root_id
         has_many :children, :class_name => name, :foreign_key => :parent_id, :dependent => :destroy
-        belongs_to :user
+        belongs_to :user, :optional => true  # because only fragments that declare 'needs_user_id' require one
 
         # Don't touch the parent when we create the child - the child was created by
-        # renderng the parent, which occured because the parent was touched, thus
+        # rendering the parent, which occured because the parent was touched, thus
         # triggering the current request. Touching it again would result in a
         # redundant duplicate request.
         after_commit :touch_parent, :on => [:update, :destroy]
@@ -52,7 +52,8 @@ module Fragmentary
           raise ArgumentError, "You passed Fragment #{fragment.id} to Fragment.root, but it's a child of Fragment #{fragment.parent_id}" if fragment.parent_id
         else
           klass, search_attributes, options = base_class.attributes(options)
-          fragment = klass.where(search_attributes).includes(:children).first_or_initialize(options); fragment.save if fragment.new_record?
+          fragment = klass.where(search_attributes).includes(:children).first_or_initialize(options);
+          fragment.save if fragment.new_record?
           fragment.set_indexed_children if fragment.child_search_key
         end
         fragment
@@ -596,7 +597,7 @@ module Fragmentary
 
     private
     def touch_parent
-      parent.try(:touch, {:no_request => @no_request}) unless previous_changes["memo"]
+      parent.try(:touch, {:no_request => @no_request}) unless (previous_changes.none? || previous_changes["memo"])
       @no_request = false
     end
 
