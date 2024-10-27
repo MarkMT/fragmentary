@@ -167,8 +167,13 @@ module Fragmentary
         super
       end
 
-      def remove_queued_request(user:, request_path:)
-        request_queues.each{|key, hsh| hsh[user_type(user)].remove_path(request_path)}
+      def remove_queued_request(host_url: nil, user:, request_path:)
+        u_type = user_type(user)
+        if host_url.is_a?(String) and (queue = request_queues[host_url][u_type])
+          queue.remove_path(request_path)
+        else
+          request_queues.each{|key, hsh| hsh[u_type].remove_path(request_path)}
+        end
       end
 
       def subscriber
