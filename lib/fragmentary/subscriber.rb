@@ -14,7 +14,8 @@ module Fragmentary
     def initialize(client)
       @client = client
       @subscriptions = Hash.new do |h, key|
-        if Object.const_defined?(key) and (publisher = key.constantize) < ActiveRecord::Base
+        publisher = key.constantize  # Ensures that the model is loaded so that the const below is defined.
+        if Object.const_defined?(key) and publisher < ActiveRecord::Base
           h[key] = Subscription.new(publisher, self)
         else
           nil
