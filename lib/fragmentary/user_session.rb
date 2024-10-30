@@ -43,6 +43,7 @@ module Fragmentary
 
     def relative_url_root
       @relative_url_root ||= Rails.application.config.relative_url_root
+      @relative_url_root ||= Rails.application.routes.default_url_options[:relative_url_root].try(:gsub, /\/$/,'')
     end
 
     def session_options
