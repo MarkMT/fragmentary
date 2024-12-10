@@ -602,7 +602,7 @@ module Fragmentary
 
     private
     def touch_parent
-      parent.try(:touch, {:no_request => @no_request}) unless (previous_changes.none? || previous_changes["memo"])
+      parent.try(:touch, {:no_request => @no_request}) unless previous_changes["memo"]
       @no_request = false
     end
 
