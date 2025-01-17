@@ -507,6 +507,7 @@ module Fragmentary
 
     # delete the associated cache content before destroying the fragment
     def destroy(options = {})
+      children.each(&:destroy)
       options.delete(:delete_matches) ? delete_matched_cache : delete_cache
       @no_request = options.delete(:no_request)  # stored for use in #touch_parent via the after_commit callback
       super()
