@@ -76,11 +76,13 @@ module Fragmentary
 
     private
     def call_method(method, record)
-      Rails.logger.info "***** Calling #{method.inspect} on #{subscriber.client.name} with record #{record.class.name} #{record.id}"
-      start = Time.now
-      subscriber.public_send(method, record) if subscriber.respond_to? method
-      finish = Time.now
-      Rails.logger.info "***** #{method.inspect} duration: #{(finish - start) * 1000}ms\n\n"
+      if subscriber.respond_to? method
+        Rails.logger.info "***** Calling #{method.inspect} on #{subscriber.client.name} with record #{record.class.name} #{record.id}"
+        start = Time.now
+        subscriber.public_send(method, record)
+        finish = Time.now
+        Rails.logger.info "***** #{method.inspect} duration: #{(finish - start) * 1000}ms\n\n"
+      end
     end
 
   end
