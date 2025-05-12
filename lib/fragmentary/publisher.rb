@@ -39,7 +39,9 @@ module Fragmentary
       end
 
       def after_destroy_broadcast
+        Rails.logger.info "\n***** #{start = Time.now} broadcasting :after_destroy from #{self.class.name} #{self.id}\n"
         broadcast(:after_destroy, self)
+        Rails.logger.info "\n***** #{Time.now} broadcast :after_destroy from #{self.class.name} #{self.id} took #{(Time.now - start) * 1000} ms\n"
       end
 
       def after_commit_broadcast
