@@ -9,14 +9,14 @@ module Fragmentary
     end
     self.clear
 
-    def self.create(**args)
+    def self.create(args)
       @@all << (handler = self.new(args))
       handler
     end
 
     attr_reader :args
 
-    def initialize(**args)
+    def initialize(args)
       @args = args
     end
 

@@ -14,7 +14,7 @@ module Fragmentary
           raise TypeError, "Fragmentary::RequestQueue.send_all requires the keyword argument :between to be of class ActiveSupport::Duration. The value provided is of class #{between.class.name}."
         end
         delay = 0.seconds
-        all.each{|q| q.start(:delay => delay += between)}
+        all.each{|q| q.start(:delay => (delay += between))}
       end
     end
 
@@ -61,8 +61,8 @@ module Fragmentary
       sender.start(args)
     end
 
-    def method_missing(method, *args)
-      sender.send(method, *args)
+    def method_missing(method, *args, **kwargs)
+      sender.send(method, *args, **kwargs)
     end
 
     class Sender
@@ -142,7 +142,7 @@ module Fragmentary
         if queue.size > 0
           clear_session
           job = SendRequestsJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
-          job.enqueue(:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority)
+          job.enqueue({:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority})
         end
       end
 

@@ -90,7 +90,7 @@ module Fragmentary
         puts "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
         Rails.logger.info "      * Sending request '#{method.to_s} #{path}'" + (!parameters.nil? ? " with #{parameters.inspect}" : "")
       end
-      @session.send(method, path, options)
+      @session.send(method, path, **options)
     end
 
     def sign_out

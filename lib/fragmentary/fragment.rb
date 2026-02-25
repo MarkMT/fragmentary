@@ -499,10 +499,10 @@ module Fragmentary
       self.class.cache_store
     end
 
-    def touch(*args, no_request: false)
+    def touch(*args, no_request: false, **kwargs)
       @no_request = no_request  # stored for use in #touch_parent via the after_commit callback
       request_queues.each{|key, hsh| hsh.each{|key2, queue| queue << request}} if request && !no_request
-      super(*args)
+      super(*args, **kwargs)
     end
 
     # delete the associated cache content before destroying the fragment
@@ -603,7 +603,9 @@ module Fragmentary
 
     private
     def touch_parent
-      parent.try(:touch, {:no_request => @no_request}) unless previous_changes["memo"]
+      if parent
+        parent.touch(no_request: @no_request) unless previous_changes["memo"]
+      end
       @no_request = false
     end
 
