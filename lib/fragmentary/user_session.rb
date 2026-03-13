@@ -17,6 +17,7 @@ module Fragmentary
       @user = user
       @target = URI.parse(target)
       @session.host! session_host
+      @session.https! if (@target.scheme == 'https')
       sign_in if session_credentials
       instance_eval(&block) if block_given?
     end
