@@ -57,8 +57,8 @@ module Fragmentary
       @sender ||= Sender.new(self)
     end
 
-    def send(**args)
-      sender.start(args)
+    def send(**kwargs)
+      sender.start(**kwargs)
     end
 
     def method_missing(method, *args, **kwargs)
