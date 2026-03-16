@@ -122,9 +122,10 @@ module Fragmentary
       end
 
       def send_next_request
+        Rails.logger.info "***** next request queue size #{queue.size}"
         if queue.size > 0
           request = queue.next_request
-          Rails.logger.info "***** next request #{request.inspect} size #{queue.size}"
+          Rails.logger.info "***** request #{request.inspect}"
           parameters = (request.parameters || {}).merge(:queue_suffix => queue_suffix)
           session.send_request(:method => request.method, :path => request.path, :parameters => parameters, :options => request.options)
         end
@@ -133,7 +134,7 @@ module Fragmentary
       private
 
       def send_all_requests
-        Rails.logger.info "***** sending all requests, size = #{queue.size}"
+        Rails.logger.info "***** sending all requests"
         clear_session
         while queue.size > 0
           send_next_request

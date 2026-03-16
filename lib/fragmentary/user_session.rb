@@ -18,6 +18,7 @@ module Fragmentary
       @target = URI.parse(target)
       @session.host! session_host
       @session.https! if (@target.scheme == 'https')
+      Rails.logger.info "***** signing in for new session"
       sign_in if session_credentials
       instance_eval(&block) if block_given?
     end
