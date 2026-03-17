@@ -144,7 +144,9 @@ module Fragmentary
       def schedule_requests(delay=0.seconds)
         if queue.size > 0
           clear_session
+          Rails.logger.info "creating job with queue #{queue.inspect}"
           job = SendRequestsJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
+          Rails.logger.info "enqueuing job with queue #{queue.inspect}"
           job.enqueue({:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority})
         end
       end
