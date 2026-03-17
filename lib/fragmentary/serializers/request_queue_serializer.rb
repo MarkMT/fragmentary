@@ -24,6 +24,7 @@ module Fragmentary
     end
 
     def deserialize(hsh)
+      Rails.logger.info "***** #{hsh.inspect}"
       queue = RequestQueue.new(hsh[:user_type], hsh[:host_root_url])
       hsh[:requests].each do |r|
         queue << Request.new(r[:method], r[:path], r[:parameters], r[:options] || {})
