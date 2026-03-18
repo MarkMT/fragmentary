@@ -122,10 +122,8 @@ module Fragmentary
       end
 
       def send_next_request
-        Rails.logger.info "***** next request queue size #{queue.size}"
         if queue.size > 0
           request = queue.next_request
-          Rails.logger.info "***** request #{request.inspect}"
           parameters = (request.parameters || {}).merge(:queue_suffix => queue_suffix)
           session.send_request(:method => request.method, :path => request.path, :parameters => parameters, :options => request.options)
         end
@@ -134,7 +132,6 @@ module Fragmentary
       private
 
       def send_all_requests
-        Rails.logger.info "***** sending all requests"
         clear_session
         while queue.size > 0
           send_next_request
@@ -144,9 +141,7 @@ module Fragmentary
       def schedule_requests(delay=0.seconds)
         if queue.size > 0
           clear_session
-          Rails.logger.info "creating job with queue #{queue.inspect}"
           job = SendRequestsJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
-          Rails.logger.info "enqueuing job with queue #{queue.inspect}"
           job.enqueue({:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority})
         end
       end
