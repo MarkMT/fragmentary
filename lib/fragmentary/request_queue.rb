@@ -87,12 +87,13 @@ module Fragmentary
 
       end
 
-      attr_reader :queue, :target, :delay, :between, :queue_suffix, :priority, :user_group
+      attr_reader :queue, :target, :delay, :between, :queue_suffix, :priority, :user_group, :queue_name
 
       def initialize(queue)
         @queue = queue
         @target = Target.new(queue.host_root_url)
         @user_group = 'default'
+        @queue_name = @target.queue_name
       end
 
       def session_user
@@ -148,7 +149,7 @@ module Fragmentary
         if queue.size > 0
           clear_session
           job = SendRequestsJob.new(queue, delay: delay, between: between, queue_suffix: queue_suffix, priority: priority)
-          job.enqueue({:wait => delay, :queue => target.queue_name + queue_suffix, :priority => priority})
+          job.enqueue({:wait => delay, :queue => queue_name + queue_suffix, :priority => priority})
         end
       end
 
