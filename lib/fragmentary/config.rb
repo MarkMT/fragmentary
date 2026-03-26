@@ -1,10 +1,14 @@
 module Fragmentary
 
   class Config
+
     include Singleton
+
     attr_accessor :current_user_method, :get_sign_in_path, :post_sign_in_path, :sign_out_path,
-                  :users, :default_user_type_mapping, :session_users, :application_root_url_column,
-                  :remote_urls, :insert_timestamps, :deployed_at, :release_name
+                  :users, :default_user_type_mapping, :user_types, :remote_urls, :insert_timestamps,
+                  :deployed_at, :release_name
+
+    attr_reader :user_types, :application_root_url_column
 
     def initialize
       # default
@@ -18,8 +22,7 @@ module Fragmentary
 
     def session_users=(session_users)
       raise "config.session_users must be a Hash" unless session_users.is_a?(Hash)
-      Fragmentary.parse_session_users(session_users)
-      @session_users = session_users
+      @user_types = Fragmentary.parse_session_users(session_users)
     end
 
     def application_root_url_column=(column_name)
@@ -58,11 +61,15 @@ module Fragmentary
         end
       end
     elsif session_users.is_a?(Hash)
-      session_users.each_with_object([]) do |(k,v), acc|
+      session_users.each_with_object([])  do |(user_type, users), acc|
         # k is the user_type, v is an options hash that typically looks like  {:credentials => login_credentials} where
         # login_credentials is either a hash of parameters to be submitted at login or a proc that returns those parameters.
         # In the latter case, the proc is executed when we actually log in to create a new session for the specified user.
-        acc << k if user = SessionUser.new(k,v)
+        users = [users] unless users.is_a?(Array)
+        users.each do |options|
+          SessionUser.create(user_type, options)
+        end
+        acc << user_type
       end
     end
   end

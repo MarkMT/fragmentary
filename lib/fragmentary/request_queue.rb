@@ -87,15 +87,16 @@ module Fragmentary
 
       end
 
-      attr_reader :queue, :target, :delay, :between, :queue_suffix, :priority
+      attr_reader :queue, :target, :delay, :between, :queue_suffix, :priority, :user_group
 
       def initialize(queue)
         @queue = queue
         @target = Target.new(queue.host_root_url)
+        @user_group = 'default'
       end
 
       def session_user
-        @session_user ||= Fragmentary::SessionUser.fetch(queue.user_type)
+        @session_user ||= Fragmentary::SessionUser.fetch(queue.user_type, user_group)
       end
 
       def session
@@ -103,9 +104,13 @@ module Fragmentary
       end
 
       # Send all requests, either directly or by schedule
-      def start(delay: nil, between: nil, queue_suffix: '', priority: 0)
+      def start(delay: nil, between: nil, queue_suffix: '', priority: 0, user_group: 'default')
         Rails.logger.info "\n***** Processing request queue for user_type '#{queue.user_type}'\n"
-        @delay = delay; @between = between; @queue_suffix = queue_suffix; @priority = priority
+        @delay = delay
+        @between = between
+        @queue_suffix = queue_suffix
+        @priority = priority
+        @user_group = user_group
         if @delay or @between
           schedule_requests(@delay)
           # sending requests by schedule makes a copy of the sender and queue objects for
@@ -131,7 +136,8 @@ module Fragmentary
 
       private
 
-      def send_all_requests
+      def send_all_requests(user_group: 'default')
+        @user_group = user_group
         clear_session
         while queue.size > 0
           send_next_request

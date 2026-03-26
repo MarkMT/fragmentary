@@ -215,7 +215,7 @@ module Fragmentary
           end
           @user_types = Fragmentary.parse_session_users(options[:session_users] || options[:types] || options[:user_types])
           def self.user_types
-            @user_types || Fragmentary.config.session_users.keys
+            @user_types || Fragmentary.config.user_types
           end
         end
       end
