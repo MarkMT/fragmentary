@@ -36,12 +36,15 @@ module Fragmentary
 
   # Parse a set of session_user options, creating session_users where needed, and return a set of user_type keys.
   # session_users may take several forms:
-  #   (1) a hash whose keys are user_type strings and whose values have the form {:credentials => credentials},
-  #       where 'credentials' is either a hash of parameters to be submitted when logging in or a proc that
-  #       returns those parameters.
+  #   (1) a hash whose keys are user_type strings and whose values consist of either:
+  #       (a) a hash with the form {:credentials => credentials},
+  #           where 'credentials' is either a hash of parameters to be submitted when logging in or a proc that
+  #           returns those parameters.
+  #       (b) an array of hashes, each of the form {:credentials => credentials, :group => group_name}
+  #           where the ':group' element of the hash is optional
   #   (2) an array of hashes as described in (1) above.
   #   (3) an array of user_type strings corresponding to SessionUser objects already defined.
-  #   (4) an array containing a mixture of user_type strings and hashes as described in (1) above.
+  #   (4) an array containing a mixture of user_type strings as described in (3) and hashes as described in (1) above.
   # Non-hash elements that don't represent existing SessionUser objects should raise an exception. Array
   # elements that are hashes should be parsed to create new SessionUser objects. Raise an exception on
   # any attempt to redefine an existing user_type.
@@ -62,8 +65,8 @@ module Fragmentary
       end
     elsif session_users.is_a?(Hash)
       session_users.each_with_object([])  do |(user_type, users), acc|
-        # k is the user_type, v is an options hash that typically looks like  {:credentials => login_credentials} where
-        # login_credentials is either a hash of parameters to be submitted at login or a proc that returns those parameters.
+        # users is either an options hash that typically looks like  {:credentials => credentials} or an array of such hashes,
+        # where credentials is either a hash of parameters to be submitted at login or a proc that returns those parameters.
         # In the latter case, the proc is executed when we actually log in to create a new session for the specified user.
         users = [users] unless users.is_a?(Array)
         users.each do |options|
