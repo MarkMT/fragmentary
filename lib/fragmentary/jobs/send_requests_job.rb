@@ -12,7 +12,7 @@ module Fragmentary
       @between = between
       @queue_suffix = queue_suffix
       @priority = priority
-      @between ? @queue.send_next_request : @queue.send_all_requests
+      (@between && @between.is_a?(ActiveSupport::Duration)) ? @queue.send_next_request : @queue.send_all_requests
     end
 
     def schedule_next

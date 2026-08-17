@@ -6,15 +6,19 @@ module Fragmentary
       @@all ||= []
     end
 
-    def self.send_all(between: nil)
-      unless between
-        all.each{|q| q.start}
+    def self.send_all(delay: nil, between: nil, queue_suffix: '', priority: 0, user_group: 'default')
+      unless delay or between
+        all.each{|q| q.start(queue_suffix: queue_suffix, priority: priority, user_group: user_group)}
       else
+        delay ||= 0.seconds
+        between ||= 0.seconds
+        unless delay.is_a? ActiveSupport::Duration
+          raise TypeError, "Fragmentary::RequestQueue.send_all requires the keyword argument :delay to be of class ActiveSupport::Duration. The value provided is of class #{delay.class.name}."
+        end
         unless between.is_a? ActiveSupport::Duration
           raise TypeError, "Fragmentary::RequestQueue.send_all requires the keyword argument :between to be of class ActiveSupport::Duration. The value provided is of class #{between.class.name}."
         end
-        delay = 0.seconds
-        all.each{|q| q.start(:delay => (delay += between))}
+        all.each{|q| q.start(delay: (delay += between), queue_suffix: queue_suffix, priority: priority, user_group: user_group)}
       end
     end
 
@@ -105,6 +109,9 @@ module Fragmentary
       end
 
       # Send all requests, either directly or by schedule
+      # Note that the :between argument here represents the time between sending consecutive *requests*, whereas in RequestQueue#send_all it
+      # represents the time between starting consecutive queues.
+      # The :between argument here is deprecated. There is no :between value passed from RequestQueue.send_all to RequestQueue::Sender#start
       def start(delay: nil, between: nil, queue_suffix: '', priority: 0, user_group: 'default')
         Rails.logger.info "\n***** Processing request queue for user_type '#{queue.user_type}'\n"
         @delay = delay

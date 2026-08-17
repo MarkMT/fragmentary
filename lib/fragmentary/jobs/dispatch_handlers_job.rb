@@ -9,10 +9,7 @@ module Fragmentary
         Rails.logger.info "\n***** Dispatching task for handler class #{task.class.name}"
         task.call
       end
-      delay = 0.seconds
-      RequestQueue.all.each do |queue|
-        queue.start(:delay => delay += 10.seconds, :priority => 10)
-      end
+      RequestQueue.send_all(:between => 10.seconds, :priority => 10)
     end
 
   end
