@@ -18,7 +18,7 @@ In simple cases, Rails' native support for fragment caching assumes that a fragm
 ```
 The content is stored in the cache using a _key_ value derived from the record's `id` attribute. The key identifies where the cached content is stored. In addition, a _version_ value derived from the record's `updated_at` attribute is stored along with the content [^1]. If any attributes of the record change, the `updated_at` attribute also changes; the next time a browser requests the content, a mismatch will exist between the calculated and stored values of the version, causing the cache to expire and the fragment to be re-rendered using the current data.
 
-[^1]: Prior to Rails 5.2, the value of `updated_at` was incorporated into the cache key rather that the version. That behavior is still available by setting `config.active_record.cache_versioning = false` in `config/application.rb`. 
+[^1]: Prior to Rails 5.2, the value of `updated_at` was incorporated into the cache key rather than the version. That behavior is still available by setting `config.active_record.cache_versioning = false` in `config/application.rb`.
 
 For data models with a `has_one` or `has_many` association, nested (Russian Doll) caching is possible with the inner fragment representing the associated record. For example if a product has many games -
 ```
@@ -712,7 +712,7 @@ end
 
 Another scenario that occasionally arises is when internal requests created in the course of executing methods defined in a `subscribe_to` block include the path to the same page that the controller is going to render anyway in the normal course of responding to the user's current browser request. In effect, that one internal request is redundant. Although it generally won't cause any real harm to send a redundant request (remember the internal request is usually dispatched asynchronously, so it won't interfere with the synchronous response), redundancy is redundancy and you may wish to avoid it.
 
-In this case, it is possible within the controller to remove a request that has already been queued, after the application data has been created, updated or destroyed, by using the class method `Fragment.remove_queued_request`. The method takes two named parameters, the path of the request to be removed and the current user object, with the latter allowing it to remove the request from the correct queue, e.g.
+In this case, it is possible within the controller to remove a request that has already been queued, after the application data has been created, updated or destroyed, by using the class method `Fragment.remove_queued_request`. The method takes two required keyword parameters, the path of the request to be removed and the current user object, with the latter allowing it to remove the request from only queues corresponding to the current_user's user_type, e.g.
 
 ```
 class ProductsController < ApplicationController
@@ -731,6 +731,12 @@ class ProductsController < ApplicationController
     end
   end
 end
+```
+As written above, `remove_queued_request` will remove the specified request from all queues defined for the `user_type` of the current user. If you have multiple application instances defined, a request_queue for that user_type will exist for each instance. If you only want to remove the request from the queue for a specific instance, you can include an additional optional keyword parameter `:host_url` specifiying the root_url of that instance, e.g.
+```
+...
+      ProductTemplate.remove_queued_request(:request_path => "/products/#{@product.id}", :user => current_user, :host_url => Fragmentary.application_root_url)
+...
 ```
 
 ### Handling AJAX Requests
